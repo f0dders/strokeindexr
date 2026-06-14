@@ -4,3 +4,9 @@ __pycache__/
 *.pyo
 data/
 .DS_Store
+
+# Dev-only files
+dev.py
+Start - Dev (Mac).command
+Start - Dev (Windows).bat
+Start - Dev (Linux).sh
