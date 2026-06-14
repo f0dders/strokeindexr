@@ -150,6 +150,99 @@ function renderCharts(trends) {
   }
 }
 
+// ── Shot map ──────────────────────────────────────────────────────────────────
+function renderShotMapHTML(holesJson) {
+  if (!holesJson) return "";
+  let holes;
+  try { holes = JSON.parse(holesJson); } catch { return ""; }
+  const tracked = holes.filter(h => h.hole_score.stroke_scores?.length);
+  if (!tracked.length) return "";
+
+  const panels = tracked.map(h => `
+    <div class="shot-map-panel">
+      <div class="shot-map-hole-title">
+        Hole ${h.sequence} — Par ${h.hole_tee.par} &nbsp;|&nbsp;
+        ${h.hole_score.stroke_scores.length} shot${h.hole_score.stroke_scores.length > 1 ? "s" : ""} tracked
+      </div>
+      <div id="shotmap-${h.sequence}" class="shot-map-container"></div>
+    </div>
+  `).join("");
+
+  return `
+    <div class="shot-map-section">
+      <h4>Shot Tracking</h4>
+      <div class="shot-map-grid">${panels}</div>
+    </div>`;
+}
+
+function initShotMaps(holesJson) {
+  if (!holesJson || typeof L === "undefined") return;
+  let holes;
+  try { holes = JSON.parse(holesJson); } catch { return; }
+  const tracked = holes.filter(h => h.hole_score.stroke_scores?.length);
+
+  function divIcon(html) {
+    return L.divIcon({ html, className: "", iconSize: [28, 28], iconAnchor: [14, 14] });
+  }
+
+  tracked.forEach(h => {
+    const el = document.getElementById(`shotmap-${h.sequence}`);
+    if (!el || el._leaflet_id) return; // already initialised
+
+    const map = L.map(el, { zoomControl: true, attributionControl: true });
+
+    // Satellite layer (Esri, free, no key needed)
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { attribution: "Tiles © Esri | Map data © OpenStreetMap contributors", maxZoom: 20 }
+    ).addTo(map);
+
+    // OSM labels overlay so street/feature names show on top of satellite
+    L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { attribution: "", maxZoom: 20, opacity: 0.35 }
+    ).addTo(map);
+
+    const latlngs = [];
+
+    // Tee marker
+    const tee = [h.hole_score.tee_latitude, h.hole_score.tee_longitude];
+    latlngs.push(tee);
+    L.marker(tee, { icon: divIcon('<div class="map-marker-tee">T</div>') })
+      .addTo(map)
+      .bindPopup(`<div class="map-popup"><strong>Tee — Hole ${h.sequence}</strong>Par ${h.hole_tee.par} &nbsp;|&nbsp; SI ${h.hole_tee.stroke_index ?? "—"}<br>${Math.round(h.hole_tee.distance)}y from tee</div>`);
+
+    // Shot markers
+    h.hole_score.stroke_scores.forEach(shot => {
+      const pos = [shot.latitude, shot.longitude];
+      latlngs.push(pos);
+      const club = shot.club || "Unknown";
+      const dist = shot.distance ? `${shot.distance}y` : "—";
+      const lie  = shot.lie_name || shot.lie || "—";
+      L.marker(pos, { icon: divIcon(`<div class="map-marker-shot">${shot.sequence}</div>`) })
+        .addTo(map)
+        .bindPopup(`<div class="map-popup"><strong>Shot ${shot.sequence}</strong>${club} &nbsp;|&nbsp; ${dist}<br>Lie: ${lie}</div>`);
+    });
+
+    // Flag marker if position recorded
+    const flagLat = h.hole_score.custom_flag_latitude;
+    const flagLon = h.hole_score.custom_flag_longitude;
+    if (flagLat && flagLon) {
+      const flagPos = [flagLat, flagLon];
+      latlngs.push(flagPos);
+      L.marker(flagPos, { icon: divIcon('<div class="map-marker-flag">⛳</div>') })
+        .addTo(map)
+        .bindPopup(`<div class="map-popup"><strong>Flag — Hole ${h.sequence}</strong></div>`);
+    }
+
+    // Dashed line: tee → shots (→ flag)
+    L.polyline(latlngs, { color: "#fff", weight: 2, dashArray: "6 4", opacity: 0.85 }).addTo(map);
+
+    // Fit view with generous padding
+    map.fitBounds(L.latLngBounds(latlngs).pad(0.45));
+  });
+}
+
 // ── Scorecard renderer ────────────────────────────────────────────────────────
 function renderScorecard(holesJson) {
   if (!holesJson) return "";
@@ -313,6 +406,7 @@ async function showRoundDetail(id) {
     </div>
 
     ${renderScorecard(r.holes_json)}
+    ${renderShotMapHTML(r.holes_json)}
 
     <div class="notes-section">
       <h4>Round Notes</h4>
@@ -334,6 +428,9 @@ async function showRoundDetail(id) {
       <div id="debriefOutput" class="ai-output">${r.ai_debrief ? marked.parse(r.ai_debrief) : ""}</div>
     </div>
   `;
+
+  // Initialise Leaflet maps after DOM is ready
+  initShotMaps(r.holes_json);
 
   document.getElementById("btnSaveNotes").addEventListener("click", async () => {
     const notes = document.getElementById("notesArea").value;
