@@ -690,6 +690,42 @@ h3 {
   max-width: 95vw;
   box-shadow: 0 8px 40px rgba(0,0,0,.18);
 }
+.settings-modal-box { width: 500px; }
+.settings-section {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  margin-bottom: 6px;
+}
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.hcp-recalc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.hcp-recalc-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.hcp-recalc-value { font-size: 22px; font-weight: 700; color: var(--green); }
+.whs-recalc-detail {
+  font-size: 13px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-radius: 6px;
+  margin-bottom: 14px;
+  line-height: 1.8;
+}
+.whs-recalc-ok   { color: var(--green); }
+.whs-recalc-excl { color: var(--text-muted); }
 .modal-box h2 { margin-bottom: 20px; font-size: 18px; color: var(--green); }
 .modal-box label {
   display: block;

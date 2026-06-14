@@ -28,7 +28,7 @@
       <li><a href="#" data-view="ai">AI Analysis</a></li>
     </ul>
     <div class="sidebar-footer">
-      <button class="btn-settings" id="btnSettings">⚙ AI Settings</button>
+      <button class="btn-settings" id="btnSettings">⚙ Settings</button>
     </div>
   </nav>
 
@@ -144,31 +144,56 @@
 
   </main>
 
-  <!-- ── AI SETTINGS MODAL ── -->
+  <!-- ── SETTINGS MODAL ── -->
   <div id="modalSettings" class="modal hidden">
-    <div class="modal-box">
-      <h2>AI Settings</h2>
-      <label>Provider
-        <select id="aiProvider">
-          <option value="claude">Claude (Anthropic)</option>
-          <option value="openai">OpenAI</option>
-          <option value="gemini">Gemini</option>
-          <option value="groq">Groq</option>
-          <option value="mistral">Mistral</option>
-          <option value="openrouter">OpenRouter</option>
-          <option value="ollama">Ollama (local)</option>
-          <option value="lmstudio">LM Studio (local)</option>
-        </select>
-      </label>
-      <label id="labelApiKey">API Key
-        <input type="password" id="aiApiKey" placeholder="sk-..." />
-      </label>
-      <label>Model (leave blank for default)
-        <input type="text" id="aiModel" placeholder="e.g. claude-sonnet-4-6" />
-      </label>
-      <label id="labelBaseUrl" class="hidden">Base URL
-        <input type="text" id="aiBaseUrl" placeholder="http://localhost:11434" />
-      </label>
+    <div class="modal-box settings-modal-box">
+      <h2>Settings</h2>
+
+      <!-- Handicap -->
+      <div class="settings-section">
+        <h3 class="settings-section-title">Handicap</h3>
+        <label>Display handicap as
+          <select id="hcpMode">
+            <option value="whs">WHS Handicap Index (calculated)</option>
+            <option value="hole19">Hole19 Playing Handicap</option>
+          </select>
+        </label>
+        <div class="hcp-recalc-row">
+          <div>
+            <div class="hcp-recalc-label">Current WHS Index</div>
+            <div class="hcp-recalc-value" id="whsCurrentDisplay">—</div>
+          </div>
+          <button class="btn-secondary" id="btnRecalcWhs">↺ Recalculate</button>
+        </div>
+        <div id="whsRecalcDetail" class="whs-recalc-detail hidden"></div>
+      </div>
+
+      <!-- AI -->
+      <div class="settings-section">
+        <h3 class="settings-section-title">AI</h3>
+        <label>Provider
+          <select id="aiProvider">
+            <option value="claude">Claude (Anthropic)</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+            <option value="groq">Groq</option>
+            <option value="mistral">Mistral</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="ollama">Ollama (local)</option>
+            <option value="lmstudio">LM Studio (local)</option>
+          </select>
+        </label>
+        <label id="labelApiKey">API Key
+          <input type="password" id="aiApiKey" placeholder="sk-..." />
+        </label>
+        <label>Model (leave blank for default)
+          <input type="text" id="aiModel" placeholder="e.g. claude-sonnet-4-6" />
+        </label>
+        <label id="labelBaseUrl" class="hidden">Base URL
+          <input type="text" id="aiBaseUrl" placeholder="http://localhost:11434" />
+        </label>
+      </div>
+
       <div class="modal-actions">
         <button class="btn-secondary" id="btnCancelSettings">Cancel</button>
         <button class="btn-primary" id="btnSaveSettings">Save</button>

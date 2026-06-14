@@ -115,6 +115,9 @@ function renderGlobalSummary(gs) {
 
 function renderStatCards(s, whs) {
   const whsCurrent = whs?.current;
+  const hcpMode    = localStorage.getItem("hcpMode") || "whs";
+  const useWhs     = hcpMode === "whs";
+
   const whsVal = whsCurrent?.sufficient_data
     ? whsCurrent.index + (whsCurrent.estimated ? "*" : "")
     : "—";
@@ -123,12 +126,16 @@ function renderStatCards(s, whs) {
     ? (whsCurrent.estimated ? "WHS index (est.)" : "WHS index")
     : "WHS index (need 3+ rounds)";
 
-  const excNote = excluded.length
+  const hcpVal  = useWhs ? whsVal : (s.latest_handicap != null ? s.latest_handicap : "—");
+  const hcpSub  = useWhs ? whsSub : "Hole19 playing handicap";
+  const hcpHigh = useWhs ? whsCurrent?.sufficient_data : s.latest_handicap != null;
+  const excNote = useWhs && excluded.length
     ? `<div class="whs-excluded-note">${excluded.length} round${excluded.length > 1 ? "s" : ""} excluded from WHS</div>`
     : "";
+
   const cards = [
     { label: "Rounds Played",  value: s.total_rounds ?? "—",  sub: "total" },
-    { label: "WHS Handicap",   value: whsVal,                  sub: whsSub, highlight: whsCurrent?.sufficient_data, note: excNote },
+    { label: "Handicap",       value: hcpVal,                  sub: hcpSub, highlight: hcpHigh, note: excNote },
     { label: "Avg vs Par",     value: s.avg_score_vs_par != null ? (s.avg_score_vs_par >= 0 ? "+" : "") + fmt(s.avg_score_vs_par, "", 1) : "—", sub: "per round" },
     { label: "Avg Putts",      value: fmt(s.avg_putts, "", 1), sub: "per round" },
     { label: "Avg GIR",        value: fmt(s.avg_gir, "%"),     sub: "greens in regulation" },
@@ -1379,7 +1386,6 @@ function updateSettingsFields() {
 document.getElementById("aiProvider").addEventListener("change", updateSettingsFields);
 
 document.getElementById("btnSettings").addEventListener("click", async () => {
-  // Load current config from server — key is masked (bullets) for display
   try {
     const cfg = await apiFetch("/api/config").then(r => r.json());
     document.getElementById("aiProvider").value = cfg.provider || "claude";
@@ -1388,7 +1394,48 @@ document.getElementById("btnSettings").addEventListener("click", async () => {
     document.getElementById("aiBaseUrl").value  = cfg.base_url || "";
   } catch (_) {}
   updateSettingsFields();
+
+  // Load handicap mode from localStorage
+  document.getElementById("hcpMode").value = localStorage.getItem("hcpMode") || "whs";
+
+  // Show current WHS index
+  try {
+    const whs = await apiFetch("/api/whs").then(r => r.json());
+    const cur = whs?.current;
+    document.getElementById("whsCurrentDisplay").textContent = cur?.sufficient_data
+      ? cur.index + (cur.estimated ? "*" : "") + (cur.estimated ? "  (estimated — add course ratings for accuracy)" : "")
+      : "Insufficient data (need 3+ eligible rounds)";
+    document.getElementById("whsRecalcDetail").classList.add("hidden");
+  } catch (_) {}
+
   modal.classList.remove("hidden");
+});
+
+document.getElementById("btnRecalcWhs").addEventListener("click", async () => {
+  const btn    = document.getElementById("btnRecalcWhs");
+  const detail = document.getElementById("whsRecalcDetail");
+  btn.disabled = true;
+  btn.textContent = "Calculating…";
+  try {
+    const whs = await apiFetch("/api/whs").then(r => r.json());
+    const cur  = whs?.current;
+    const excl = cur?.excluded_rounds ?? [];
+    document.getElementById("whsCurrentDisplay").textContent = cur?.sufficient_data
+      ? cur.index + (cur.estimated ? "*" : "")
+      : "Insufficient data (need 3+ eligible rounds)";
+    detail.classList.remove("hidden");
+    detail.innerHTML = cur?.sufficient_data
+      ? `<span class="whs-recalc-ok">✓ Index recalculated from ${cur.differential_count} differential${cur.differential_count !== 1 ? "s" : ""}</span>`
+        + (excl.length ? `<br><span class="whs-recalc-excl">${excl.length} round${excl.length > 1 ? "s" : ""} excluded — manage in round detail</span>` : "")
+        + (cur.pending_nine ? `<br><span class="whs-recalc-excl">1 unpaired 9-hole round pending a second 9-hole score</span>` : "")
+      : `<span class="whs-recalc-excl">Not enough eligible rounds yet</span>`;
+  } catch (e) {
+    detail.classList.remove("hidden");
+    detail.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "↺ Recalculate";
+  }
 });
 
 document.getElementById("btnCancelSettings").addEventListener("click", () => modal.classList.add("hidden"));
@@ -1408,7 +1455,9 @@ document.getElementById("btnSaveSettings").addEventListener("click", async () =>
         base_url: document.getElementById("aiBaseUrl").value,
       }),
     });
+    localStorage.setItem("hcpMode", document.getElementById("hcpMode").value);
     modal.classList.add("hidden");
+    loadDashboard();
   } catch (e) {
     alert("Failed to save settings: " + e.message);
   } finally {

@@ -518,7 +518,8 @@ def get_stats_summary() -> dict:
                 AVG(gir_hit_pct) as avg_gir,
                 AVG(fairway_hit_pct) as avg_fir,
                 AVG(up_and_down_pct) as avg_up_and_down,
-                MIN(score_vs_par) as best_score_vs_par
+                MIN(score_vs_par) as best_score_vs_par,
+                (SELECT handicap FROM rounds ORDER BY date DESC, imported_at DESC LIMIT 1) as latest_handicap
             FROM rounds
         """).fetchone()
         return dict(row) if row else {}
