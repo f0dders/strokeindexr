@@ -39,9 +39,9 @@ def _parse_scorecard(data: dict) -> dict:
 
     holes = data.get("holes", [])
     if holes:
-        total_strokes = sum(h["hole_score"]["total_of_strokes"] for h in holes if not h["hole_score"].get("scratched"))
-        total_putts   = sum(h["hole_score"].get("total_of_putts", 0) for h in holes)
-        total_par     = sum(h["hole_tee"]["par"] for h in holes)
+        total_strokes = sum(h["hole_score"].get("total_of_strokes") or 0 for h in holes if not h["hole_score"].get("scratched"))
+        total_putts   = sum(h["hole_score"].get("total_of_putts") or 0 for h in holes)
+        total_par     = sum(h["hole_tee"].get("par") or 0 for h in holes)
 
         out["score"]        = total_strokes
         out["putts"]        = total_putts

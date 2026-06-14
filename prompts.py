@@ -60,19 +60,18 @@ Doubles+: {r.get('doubles_plus_pct')}% | Up & Down: {r.get('up_and_down_pct')}%
 Return only the 2-3 sentence summary. No headers, no bullet points."""
 
 
-def global_short_summary(rounds: list[dict]) -> str:
+def global_short_summary(rounds: list[dict], whs_index=None, from_date: str = None, to_date: str = None) -> str:
     n = len(rounds)
-    recent = rounds[-5:]
-    avg_vs_par = sum(r.get("score_vs_par") or 0 for r in recent) / len(recent)
-    avg_gir = sum(r.get("gir_hit_pct") or 0 for r in recent) / len(recent)
-    avg_putts = sum(r.get("putts") or 0 for r in recent) / len(recent)
-    latest_hcp = rounds[-1].get("handicap") if rounds else "?"
-    earliest_hcp = rounds[0].get("handicap") if rounds else "?"
+    avg_vs_par = sum(r.get("score_vs_par") or 0 for r in rounds) / n if n else 0
+    avg_gir    = sum(r.get("gir_hit_pct")  or 0 for r in rounds) / n if n else 0
+    avg_putts  = sum(r.get("putts")        or 0 for r in rounds) / n if n else 0
+    hcp_str    = f"WHS {whs_index}" if whs_index is not None else "not yet calculated"
+    period_str = f"{from_date} to {to_date}" if from_date and to_date else "all available rounds"
 
-    return f"""You are a golf coach. Based on {n} rounds of data, write a 2-3 sentence overall performance snapshot for the player's dashboard. Be direct and specific. Mention handicap trajectory, a key strength, and the single biggest area to improve.
+    return f"""You are a golf coach. Write a 2-3 sentence performance snapshot covering {n} rounds ({period_str}). Be direct and specific. Mention handicap, a key strength, and the single biggest area to improve.
 
-Data: {n} rounds tracked | Handicap: {earliest_hcp} → {latest_hcp}
-Last 5 rounds avg: {avg_vs_par:+.1f} vs par | {avg_gir:.0f}% GIR | {avg_putts:.0f} putts
+Data: {n} rounds | WHS Handicap Index: {hcp_str}
+Avg: {avg_vs_par:+.1f} vs par | {avg_gir:.0f}% GIR | {avg_putts:.0f} putts/round
 
 Return only the 2-3 sentence summary. No headers, no bullet points."""
 
@@ -120,64 +119,64 @@ Please provide:
 Keep it concise, honest, and actionable. Avoid generic advice — ground everything in the actual numbers above."""
 
 
-def performance_summary(rounds: list[dict]) -> str:
+def performance_summary(rounds: list[dict], whs_index=None, from_date: str = None, to_date: str = None) -> str:
     n = len(rounds)
     if n == 0:
         return "No rounds available to analyse."
 
     rounds_text = ""
-    for i, r in enumerate(rounds[-10:], 1):
+    for r in rounds:
+        vp = r.get("score_vs_par")
+        vp_str = f"{'+' if (vp or 0) >= 0 else ''}{vp}" if vp is not None else "?"
         rounds_text += (
-            f"\nRound {i}: {r.get('date')} | {r.get('course')} | "
-            f"Score: {r.get('score')} ({'+' if (r.get('score_vs_par') or 0) >= 0 else ''}{r.get('score_vs_par')} vs par) | "
-            f"HCP: {r.get('handicap')} | Putts: {r.get('putts')} | "
-            f"GIR: {r.get('gir_hit_pct')}% | FIR: {r.get('fairway_hit_pct')}%"
+            f"\n{r.get('date')} | {r.get('course')} | {r.get('holes')}H | "
+            f"Score: {r.get('score')} ({vp_str} vs par {r.get('par')}) | "
+            f"Putts: {r.get('putts')} | GIR: {r.get('gir_hit_pct')}% | FIR: {r.get('fairway_hit_pct')}% | "
+            f"Doubles+: {r.get('doubles_plus_pct')}%"
         )
 
-    latest_hcp = rounds[-1].get("handicap") if rounds else "?"
-    earliest_hcp = rounds[0].get("handicap") if rounds else "?"
+    hcp_str    = f"{whs_index} (WHS)" if whs_index is not None else "not yet calculated"
+    period_str = f"{from_date} to {to_date}" if from_date and to_date else "all available"
 
-    return f"""You are an experienced golf coach. Analyse the following {n} rounds of golf data and provide a performance review.
+    return f"""You are an experienced golf coach. Analyse these {n} rounds ({period_str}) and provide a performance review.
 
-ROUNDS (chronological order):
+PLAYER: WHS Handicap Index {hcp_str}
+
+ROUNDS (chronological):
 {rounds_text}
 
-HANDICAP PROGRESSION: {earliest_hcp} → {latest_hcp}
+Please provide:
 
-Please provide a structured performance review covering:
-
-1. **Overall Trend** — is this player improving, plateauing, or struggling? What does the trajectory look like?
-2. **Consistent Strengths** — what aspects of the game are reliably good across rounds?
+1. **Overall Trend** — improving, plateauing, or struggling? What does the trajectory show?
+2. **Consistent Strengths** — what is reliably working across these rounds?
 3. **Persistent Weaknesses** — what patterns keep costing shots?
-4. **Putting Analysis** — how is the putting trend looking?
-5. **Ball Striking Trend** — GIR and fairway trends
-6. **Top 3 Recommendations** — the highest-impact changes this player could make right now
+4. **Putting Analysis** — trend and impact on scoring
+5. **Ball Striking** — GIR and fairway hit trends
+6. **Top 3 Recommendations** — highest-impact changes right now
 7. **Next Goal** — a realistic, specific target for the next 5 rounds
 
-Be direct, data-driven, and honest. Avoid generic golf advice — everything should be grounded in the actual data patterns."""
+Be direct and data-driven. Ground every point in the actual numbers — avoid generic advice."""
 
 
-def practice_plan(rounds: list[dict]) -> str:
+def practice_plan(rounds: list[dict], whs_index=None, from_date: str = None, to_date: str = None) -> str:
     n = len(rounds)
     if n == 0:
         return "No rounds available to analyse."
 
-    # Compute some averages for context
-    avg_gir = sum(r.get("gir_hit_pct") or 0 for r in rounds) / n
-    avg_fir = sum(r.get("fairway_hit_pct") or 0 for r in rounds) / n
-    avg_putts = sum(r.get("putts") or 0 for r in rounds) / n
-    avg_ud = sum(r.get("up_and_down_pct") or 0 for r in rounds) / n
-    avg_scramble = sum(r.get("scrambling_pct") or 0 for r in rounds) / n
-    avg_doubles = sum(r.get("doubles_plus_pct") or 0 for r in rounds) / n
-    latest_hcp = rounds[-1].get("handicap") if rounds else "?"
+    avg_gir      = sum(r.get("gir_hit_pct")       or 0 for r in rounds) / n
+    avg_fir      = sum(r.get("fairway_hit_pct")    or 0 for r in rounds) / n
+    avg_putts    = sum(r.get("putts")              or 0 for r in rounds) / n
+    avg_ud       = sum(r.get("up_and_down_pct")    or 0 for r in rounds) / n
+    avg_scramble = sum(r.get("scrambling_pct")     or 0 for r in rounds) / n
+    avg_doubles  = sum(r.get("doubles_plus_pct")   or 0 for r in rounds) / n
+    hcp_str      = f"{whs_index} (WHS)" if whs_index is not None else "not yet calculated"
+    period_str   = f"{from_date} to {to_date}" if from_date and to_date else "all available"
 
-    return f"""You are a golf coach creating a targeted practice plan. Use the player's statistics to design an efficient, prioritised practice schedule.
+    return f"""You are a golf coach creating a targeted practice plan based on {n} rounds ({period_str}).
 
-PLAYER PROFILE:
-- Current Handicap: {latest_hcp}
-- Rounds analysed: {n}
+PLAYER: WHS Handicap Index {hcp_str}
 
-AVERAGES ACROSS ALL ROUNDS:
+AVERAGES ACROSS SELECTED ROUNDS:
 - Greens in Regulation: {avg_gir:.1f}%
 - Fairways Hit: {avg_fir:.1f}%
 - Putts per round: {avg_putts:.1f}
@@ -185,11 +184,11 @@ AVERAGES ACROSS ALL ROUNDS:
 - Scrambling: {avg_scramble:.1f}%
 - Double Bogey+ rate: {avg_doubles:.1f}%
 
-Create a practical weekly practice plan that:
-1. **Identifies the 3 biggest stroke-savers** based on the stats — what will drop the handicap fastest?
-2. **Allocates practice time** — if this player has 3 hours per week to practice, how should they split it?
-3. **Specific drills** — name actual drills for each area, not just "practice putting"
-4. **Scoring zones focus** — highlight which par types need the most attention
-5. **On-course strategy tips** — any course management changes that would immediately reduce scores
+Create a practical weekly practice plan:
+1. **3 biggest stroke-savers** — what will drop the handicap fastest based on these stats?
+2. **Practice time split** — 3 hours per week, how should it be divided?
+3. **Specific drills** — name actual drills, not just "practice putting"
+4. **Par type focus** — which par types need the most attention?
+5. **Course management** — strategy changes that would immediately reduce scores
 
-Keep it realistic for an 18-20 handicap player with limited practice time."""
+Ground every recommendation in the actual stats above."""

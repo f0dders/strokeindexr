@@ -87,7 +87,12 @@ def init_db():
                 generated_at TEXT
             )
         """)
-        for col, typedef in [("round_count", "INTEGER")]:
+        for col, typedef in [
+            ("round_count",       "INTEGER"),
+            ("from_date",         "TEXT"),
+            ("to_date",           "TEXT"),
+            ("latest_round_date", "TEXT"),
+        ]:
             try:
                 conn.execute(f"ALTER TABLE global_summaries ADD COLUMN {col} {typedef}")
             except Exception:
@@ -436,22 +441,43 @@ def get_global_summary(summary_type: str = "performance") -> dict | None:
         return dict(row) if row else None
 
 
-def save_global_summary(summary_type: str, short_summary: str, full_report: str, round_count: int = 0):
+def save_global_summary(summary_type: str, short_summary: str, full_report: str,
+                        round_count: int = 0, from_date: str = None,
+                        to_date: str = None, latest_round_date: str = None):
     with get_conn() as conn:
-        try:
-            conn.execute("ALTER TABLE global_summaries ADD COLUMN round_count INTEGER DEFAULT 0")
-        except Exception:
-            pass
         conn.execute("""
-            INSERT INTO global_summaries (type, short_summary, full_report, generated_at, round_count)
-            VALUES (?, ?, ?, datetime('now'), ?)
+            INSERT INTO global_summaries
+                (type, short_summary, full_report, generated_at, round_count,
+                 from_date, to_date, latest_round_date)
+            VALUES (?, ?, ?, datetime('now'), ?, ?, ?, ?)
             ON CONFLICT(type) DO UPDATE SET
-                short_summary = excluded.short_summary,
-                full_report   = excluded.full_report,
-                generated_at  = excluded.generated_at,
-                round_count   = excluded.round_count
-        """, (summary_type, short_summary, full_report, round_count))
+                short_summary      = excluded.short_summary,
+                full_report        = excluded.full_report,
+                generated_at       = excluded.generated_at,
+                round_count        = excluded.round_count,
+                from_date          = excluded.from_date,
+                to_date            = excluded.to_date,
+                latest_round_date  = excluded.latest_round_date
+        """, (summary_type, short_summary, full_report, round_count,
+              from_date, to_date, latest_round_date))
         conn.commit()
+
+
+def get_latest_round_date() -> str | None:
+    """Return the most recent round date in the database."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT MAX(date) AS d FROM rounds").fetchone()
+        return row["d"] if row else None
+
+
+def get_rounds_in_window(from_date: str, to_date: str) -> list[dict]:
+    """Return rounds whose date falls within [from_date, to_date] inclusive."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM rounds WHERE date >= ? AND date <= ? ORDER BY date ASC",
+            (from_date, to_date),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def save_debrief(round_id: int, text: str):

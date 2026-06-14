@@ -767,10 +767,21 @@ async function runPostImportAi(roundId, statusPrefix) {
     return;
   }
 
-  // Step: global summary (streams, we just wait for completion)
+  // Step: global summary — auto mode, only regenerates if new round added
   setImportStatus("loading", `${statusPrefix} Updating overall analysis…`);
-  const gr = await apiFetch("/api/ai/global-summary", { method: "POST" });
-  if (gr.ok) {
+  const gs = await apiFetch("/api/ai/global-summary").then(r => r.json()).catch(() => ({}));
+  const body = {
+    type:      "performance",
+    auto:      true,
+    from_date: gs.default_from,
+    to_date:   gs.default_to,
+  };
+  const gr = await apiFetch("/api/ai/global-summary", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(body),
+  });
+  if (gr.ok && gr.headers.get("content-type")?.includes("text")) {
     // Drain the stream so save_global_summary fires server-side
     const reader = gr.body.getReader();
     while (!(await reader.read()).done) {}
@@ -1113,39 +1124,66 @@ document.getElementById("btnBackToCourses").addEventListener("click", () => {
 });
 
 // ── AI Analysis ───────────────────────────────────────────────────────────────
+function fmtDateShort(d) {
+  if (!d) return "?";
+  const [y, m, day] = d.split("-");
+  return `${day}/${m}/${y}`;
+}
+
 async function loadAiAnalysis() {
-  const gs = await apiFetch("/api/ai/global-summary").then(r => r.json());
-  const stored = gs.performance;
-  const totalRounds = gs.total_rounds || 0;
-  const out = document.getElementById("aiOutput");
-  const btn = document.getElementById("btnRunAi");
-  const meta = document.getElementById("aiAnalysisMeta");
+  const gs     = await apiFetch("/api/ai/global-summary").then(r => r.json());
+  const stored = currentAnalysis === "practice" ? gs.practice : gs.performance;
+  const out    = document.getElementById("aiOutput");
+  const btn    = document.getElementById("btnRunAi");
+  const meta   = document.getElementById("aiAnalysisMeta");
+
+  // Populate date pickers with stored window or server default
+  const fromEl = document.getElementById("aiFromDate");
+  const toEl   = document.getElementById("aiToDate");
+  if (!fromEl.value) {
+    fromEl.value = stored?.from_date || gs.default_from || "";
+    toEl.value   = stored?.to_date   || gs.default_to   || "";
+  }
+  _updateWindowNote(gs.default_from, gs.default_to);
 
   if (stored?.full_report) {
     out.innerHTML = marked.parse(stored.full_report);
     btn.textContent = "↺ Regenerate";
     document.getElementById("btnExportAnalysis").classList.remove("hidden");
 
-    // Build metadata bar
-    const generatedRounds = stored.round_count || 0;
-    const dateStr = stored.generated_at ? stored.generated_at.substring(0, 10) : "unknown";
-    const daysAgo = stored.generated_at ? Math.floor((Date.now() - new Date(stored.generated_at)) / 86400000) : null;
+    const dateStr  = stored.generated_at ? stored.generated_at.substring(0, 10) : "unknown";
+    const daysAgo  = stored.generated_at ? Math.floor((Date.now() - new Date(stored.generated_at)) / 86400000) : null;
     const ageLabel = daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : `${daysAgo} days ago`;
-    const stale = totalRounds > generatedRounds;
+    const windowStr = stored.from_date && stored.to_date
+      ? `${fmtDateShort(stored.from_date)} – ${fmtDateShort(stored.to_date)}`
+      : "all rounds";
+    const hasNewRound = gs.latest_round_date && stored.latest_round_date &&
+                        gs.latest_round_date > stored.latest_round_date;
 
     meta.innerHTML = `
       <span class="ai-meta-item">Generated ${ageLabel} (${dateStr})</span>
-      <span class="ai-meta-item">Based on ${generatedRounds} of ${totalRounds} round${totalRounds !== 1 ? "s" : ""}</span>
-      ${stale ? `<span class="ai-meta-stale">⚠ ${totalRounds - generatedRounds} new round${totalRounds - generatedRounds > 1 ? "s" : ""} added — regenerate to include</span>` : `<span class="ai-meta-ok">✓ Up to date</span>`}
+      <span class="ai-meta-item">${stored.round_count || 0} rounds · ${windowStr}</span>
+      ${hasNewRound
+        ? `<span class="ai-meta-stale">⚠ New round added since last analysis — regenerate to include</span>`
+        : `<span class="ai-meta-ok">✓ Up to date</span>`}
     `;
   } else {
-    out.innerHTML = '<span class="ai-placeholder">No analysis yet — click Generate to create one.</span>';
+    out.innerHTML = '<span class="ai-placeholder">No analysis yet — set the date window and click Generate.</span>';
     btn.textContent = "Generate Analysis";
     document.getElementById("btnExportAnalysis").classList.add("hidden");
-    meta.innerHTML = totalRounds > 0
-      ? `<span class="ai-meta-stale">⚠ ${totalRounds} round${totalRounds !== 1 ? "s" : ""} uploaded — generate an analysis to see insights</span>`
+    meta.innerHTML = gs.latest_round_date
+      ? `<span class="ai-meta-stale">⚠ Rounds available — generate an analysis to see insights</span>`
       : "";
   }
+}
+
+function _updateWindowNote(defaultFrom, defaultTo) {
+  const fromEl = document.getElementById("aiFromDate");
+  const toEl   = document.getElementById("aiToDate");
+  const note   = document.getElementById("aiWindowNote");
+  if (!note) return;
+  const isDefault = fromEl.value === defaultFrom && toEl.value === defaultTo;
+  note.textContent = isDefault ? "Default: last 90 days" : "Custom window";
 }
 
 document.querySelectorAll(".ai-tab").forEach(tab => {
@@ -1153,24 +1191,73 @@ document.querySelectorAll(".ai-tab").forEach(tab => {
     document.querySelectorAll(".ai-tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
     currentAnalysis = tab.dataset.analysis;
-    document.getElementById("aiOutput").innerHTML = '<span class="ai-placeholder">Click Generate to start.</span>';
+    // Clear date pickers so they reload from stored summary for this tab
+    document.getElementById("aiFromDate").value = "";
+    document.getElementById("aiToDate").value   = "";
+    loadAiAnalysis();
   });
 });
 
 document.getElementById("btnRunAi").addEventListener("click", async () => {
-  const out = document.getElementById("aiOutput");
-  const endpoint = currentAnalysis === "performance"
-    ? "/api/ai/global-summary"
-    : "/api/ai/practice-plan";
+  const out      = document.getElementById("aiOutput");
+  const fromDate = document.getElementById("aiFromDate").value;
+  const toDate   = document.getElementById("aiToDate").value;
+  const btn      = document.getElementById("btnRunAi");
+
   out.classList.add("streaming");
   out.innerHTML = '<span class="ai-placeholder">Generating…</span>';
-  document.getElementById("btnRunAi").disabled = true;
-  await streamAI(endpoint, out);
+  btn.disabled  = true;
+
+  const body = {
+    type:      currentAnalysis,
+    from_date: fromDate || undefined,
+    to_date:   toDate   || undefined,
+  };
+
+  const resp = await apiFetch("/api/ai/global-summary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (resp.headers.get("content-type")?.includes("application/json")) {
+    const data = await resp.json();
+    if (data.skipped) {
+      const reasons = {
+        window_unchanged: "Window and data unchanged — nothing to regenerate.",
+        no_rounds_in_window: `No rounds between ${fmtDateShort(fromDate)} and ${fmtDateShort(toDate)}. Try widening the date range.`,
+        no_new_rounds: "No new rounds since last generation.",
+      };
+      out.classList.remove("streaming");
+      out.innerHTML = `<span class="ai-placeholder">${reasons[data.reason] || "Skipped."}</span>`;
+      btn.disabled = false;
+      return;
+    }
+    out.innerHTML = `<span style="color:var(--red)">Error: ${data.error || "Unknown error"}</span>`;
+    out.classList.remove("streaming");
+    btn.disabled = false;
+    return;
+  }
+
+  // Stream response
+  const reader  = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    if (text.includes("__AI_ERROR__:")) {
+      out.innerHTML = `<span style="color:var(--red)">${text.split("__AI_ERROR__:")[1].trim()}</span>`;
+      break;
+    }
+    out.innerHTML = marked.parse(text);
+  }
+
   out.classList.remove("streaming");
-  document.getElementById("btnRunAi").disabled = false;
-  document.getElementById("btnRunAi").textContent = "↺ Regenerate";
+  btn.disabled = false;
+  btn.textContent = "↺ Regenerate";
   document.getElementById("btnExportAnalysis").classList.remove("hidden");
-  // Reload metadata bar now that generation is complete
   loadAiAnalysis();
 });
 

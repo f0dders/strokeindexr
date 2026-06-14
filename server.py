@@ -6,6 +6,7 @@ from database import (
     get_rounds, get_round, delete_round,
     update_notes, save_debrief, save_short_summary, set_handicap_excluded,
     get_global_summary, save_global_summary,
+    get_latest_round_date, get_rounds_in_window,
     get_stats_summary, get_trend_data,
     get_courses, get_course, update_course_ratings,
     get_rounds_for_course, get_all_rounds_with_course_ratings,
@@ -438,51 +439,103 @@ def api_ai_round_short_summary(round_id):
         return jsonify({"error": str(e)}), 500
 
 
+def _default_window():
+    """Return (from_date, to_date) for the default 90-day window anchored to latest round."""
+    from datetime import date, timedelta
+    latest = get_latest_round_date()
+    if not latest:
+        return None, None
+    to_dt   = date.fromisoformat(latest)
+    from_dt = to_dt - timedelta(days=90)
+    return from_dt.isoformat(), to_dt.isoformat()
+
+
 @app.route("/api/ai/global-summary", methods=["GET"])
 def api_get_global_summary():
-    total_rounds = len(get_rounds(limit=1000))
+    from_date, to_date = _default_window()
     return jsonify({
         "performance":  get_global_summary("performance"),
         "practice":     get_global_summary("practice"),
-        "total_rounds": total_rounds,
+        "default_from": from_date,
+        "default_to":   to_date,
+        "latest_round_date": get_latest_round_date(),
     })
 
 
 @app.route("/api/ai/global-summary", methods=["POST"])
 def api_gen_global_summary():
-    """Generate and save both short snapshot and full report for performance summary."""
-    rounds = get_rounds(limit=50)
+    """
+    Generate global summary for the requested date window.
+    Body: {from_date?, to_date?, type?, auto?}
+
+    Skips generation if the stored summary already covers the same window
+    and round count — unless `force` is true.
+
+    If `auto` is true (called from import flow), also skips if the new round
+    date is not newer than the stored latest_round_date watermark.
+    """
+    body      = request.json or {}
+    summary_type = body.get("type", "performance")
+    force     = body.get("force", False)
+    auto      = body.get("auto", False)
+
+    from_date = body.get("from_date")
+    to_date   = body.get("to_date")
+    if not from_date or not to_date:
+        from_date, to_date = _default_window()
+    if not from_date:
+        return jsonify({"error": "No rounds in database"}), 400
+
+    rounds = get_rounds_in_window(from_date, to_date)
     if not rounds:
-        return jsonify({"error": "No rounds to analyse"}), 400
+        return jsonify({"skipped": True, "reason": "no_rounds_in_window",
+                        "from_date": from_date, "to_date": to_date}), 200
+
+    latest_round_date = get_latest_round_date()
+
+    # Auto-regen guard: skip if no new calendar rounds since last generation
+    stored = get_global_summary(summary_type)
+    if auto and not force and stored:
+        stored_watermark = stored.get("latest_round_date")
+        if stored_watermark and latest_round_date and latest_round_date <= stored_watermark:
+            return jsonify({"skipped": True, "reason": "no_new_rounds"}), 200
+
+    # Manual regen guard: skip if same window and same round count
+    if not auto and not force and stored:
+        if (stored.get("from_date") == from_date and
+                stored.get("to_date") == to_date and
+                stored.get("round_count") == len(rounds)):
+            return jsonify({"skipped": True, "reason": "window_unchanged"}), 200
+
     try:
         provider = _build_provider()
 
-        # Short snapshot (non-streaming, fast)
-        short_text = "".join(provider.stream(prompts.global_short_summary(rounds)))
+        # Get WHS index for richer prompts
+        all_rounds_whs = get_all_rounds_with_course_ratings()
+        whs = current_index(all_rounds_whs)
+        whs_index = whs.get("index")
+
+        short_text = "".join(provider.stream(
+            prompts.global_short_summary(rounds, whs_index=whs_index,
+                                         from_date=from_date, to_date=to_date)
+        ))
 
         round_count = len(rounds)
+        prompt_fn = prompts.performance_summary if summary_type == "performance" else prompts.practice_plan
 
         def generate():
             yield from _safe_stream(
                 provider,
-                prompts.performance_summary(rounds),
-                on_complete=lambda full: save_global_summary("performance", short_text, full, round_count),
+                prompt_fn(rounds, whs_index=whs_index, from_date=from_date, to_date=to_date),
+                on_complete=lambda full: save_global_summary(
+                    summary_type, short_text, full,
+                    round_count=round_count,
+                    from_date=from_date, to_date=to_date,
+                    latest_round_date=latest_round_date,
+                ),
             )
 
         return Response(generate(), mimetype="text/plain")
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/ai/performance-summary", methods=["POST"])
-def api_ai_performance_summary():
-    rounds = get_rounds(limit=50)
-    if not rounds:
-        return jsonify({"error": "No rounds to analyse"}), 400
-    try:
-        provider = _build_provider()
-        prompt = prompts.performance_summary(rounds)
-        return Response(_safe_stream(provider, prompt), mimetype="text/plain")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
