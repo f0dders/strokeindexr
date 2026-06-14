@@ -1,9 +1,11 @@
 """SQLite database layer for FairwayIQ."""
 
+import json
 import sqlite3
 import os
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "golf.db")
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "data", "config.json")
 
 
 def get_conn():
@@ -56,9 +58,15 @@ def init_db():
                 doubles_plus_pct REAL,
 
                 best_hole INTEGER,
-                notes TEXT
+                notes TEXT,
+                ai_debrief TEXT
             )
         """)
+        # Migrate: add ai_debrief column to existing DBs that predate it
+        try:
+            conn.execute("ALTER TABLE rounds ADD COLUMN ai_debrief TEXT")
+        except Exception:
+            pass
         conn.commit()
 
 
@@ -99,6 +107,30 @@ def update_notes(round_id: int, notes: str):
     with get_conn() as conn:
         conn.execute("UPDATE rounds SET notes = ? WHERE id = ?", (notes, round_id))
         conn.commit()
+
+
+def save_debrief(round_id: int, text: str):
+    with get_conn() as conn:
+        conn.execute("UPDATE rounds SET ai_debrief = ? WHERE id = ?", (text, round_id))
+        conn.commit()
+
+
+# ── Config (API keys, AI settings) ───────────────────────────────────────────
+
+def load_config() -> dict:
+    if not os.path.exists(CONFIG_PATH):
+        return {}
+    try:
+        with open(CONFIG_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_config(config: dict):
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
 
 
 def get_stats_summary() -> dict:

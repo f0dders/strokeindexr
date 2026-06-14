@@ -1,9 +1,11 @@
 """Flask server for FairwayIQ."""
 
-import json
-import re
 from flask import Flask, request, jsonify, Response, send_from_directory
-from database import init_db, insert_round, get_rounds, get_round, delete_round, update_notes, get_stats_summary, get_trend_data
+from database import (
+    init_db, insert_round, get_rounds, get_round, delete_round,
+    update_notes, save_debrief, get_stats_summary, get_trend_data,
+    load_config, save_config,
+)
 from scraper import scrape_round
 import prompts
 
@@ -74,28 +76,56 @@ def api_stats_trends():
     return jsonify(get_trend_data())
 
 
+# ── Config API (API keys stored server-side in data/config.json) ──────────────
+
+@app.route("/api/config", methods=["GET"])
+def api_get_config():
+    cfg = load_config()
+    # Mask the key so it never leaves the server in plain text after initial save
+    masked = {**cfg}
+    if masked.get("api_key"):
+        masked["api_key"] = "•" * 8
+    return jsonify(masked)
+
+
+@app.route("/api/config", methods=["POST"])
+def api_save_config():
+    incoming = request.json or {}
+    cfg = load_config()
+    # Only overwrite the key if the user actually typed a new one (not the masked placeholder)
+    if incoming.get("api_key", "").strip("•"):
+        cfg["api_key"] = incoming["api_key"]
+    cfg["provider"] = incoming.get("provider", cfg.get("provider", "claude"))
+    cfg["model"]    = incoming.get("model",    cfg.get("model", ""))
+    cfg["base_url"] = incoming.get("base_url", cfg.get("base_url", ""))
+    save_config(cfg)
+    return jsonify({"ok": True})
+
+
 # ── AI API ────────────────────────────────────────────────────────────────────
 
-def _build_provider(config: dict):
+def _build_provider():
+    """Build an AI provider from the saved server-side config."""
     from providers import (
         ClaudeProvider, OpenAIProvider, GeminiProvider,
         GroqProvider, MistralProvider, OpenRouterProvider,
         OllamaProvider, LMStudioProvider,
     )
-    name = config.get("provider", "claude")
-    model = config.get("model", "")
-    key = config.get("api_key", "")
-    url = config.get("base_url", "")
+    cfg = load_config()
+    name = cfg.get("provider", "claude")
+    model = cfg.get("model", "")
+    key = cfg.get("api_key", "")
+    url = cfg.get("base_url", "")
 
     mapping = {
-        "claude": lambda: ClaudeProvider(api_key=key, model=model or ClaudeProvider.DEFAULT_MODEL),
-        "openai": lambda: OpenAIProvider(api_key=key, model=model or "gpt-4o"),
-        "gemini": lambda: GeminiProvider(api_key=key, model=model or "gemini-1.5-pro"),
-        "groq": lambda: GroqProvider(api_key=key, model=model or "llama3-70b-8192"),
-        "mistral": lambda: MistralProvider(api_key=key, model=model or "mistral-large-latest"),
-        "openrouter": lambda: OpenRouterProvider(api_key=key, model=model or "anthropic/claude-3.5-sonnet"),
-        "ollama": lambda: OllamaProvider(model=model or "llama3", base_url=url or "http://localhost:11434"),
-        "lmstudio": lambda: LMStudioProvider(model=model or "local-model", base_url=url or "http://localhost:1234"),
+        "claude":      lambda: ClaudeProvider(api_key=key, model=model or ClaudeProvider.DEFAULT_MODEL),
+        "openai":      lambda: OpenAIProvider(api_key=key, model=model or "gpt-4o"),
+        "gemini":      lambda: GeminiProvider(api_key=key, model=model or "gemini-1.5-pro"),
+        "groq":        lambda: GroqProvider(api_key=key, model=model or "llama3-70b-8192"),
+        "mistral":     lambda: MistralProvider(api_key=key, model=model or "mistral-large-latest"),
+        "openrouter":  lambda: OpenRouterProvider(api_key=key, model=model or "anthropic/claude-3.5-sonnet"),
+        "ollama":      lambda: OllamaProvider(model=model or "llama3", base_url=url or "http://localhost:11434"),
+        "lmstudio":    lambda: LMStudioProvider(model=model or "local-model", base_url=url or "http://localhost:1234"),
     }
     factory = mapping.get(name)
     if not factory:
@@ -109,11 +139,15 @@ def api_ai_round_debrief(round_id):
     if not r:
         return jsonify({"error": "Round not found"}), 404
     try:
-        provider = _build_provider(request.json or {})
+        provider = _build_provider()
         prompt = prompts.round_debrief(r)
         def generate():
+            full = []
             for chunk in provider.stream(prompt):
+                full.append(chunk)
                 yield chunk
+            # Persist the completed debrief so it survives navigation
+            save_debrief(round_id, "".join(full))
         return Response(generate(), mimetype="text/plain")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -125,7 +159,7 @@ def api_ai_performance_summary():
     if not rounds:
         return jsonify({"error": "No rounds to analyse"}), 400
     try:
-        provider = _build_provider(request.json or {})
+        provider = _build_provider()
         prompt = prompts.performance_summary(rounds)
         def generate():
             for chunk in provider.stream(prompt):
@@ -141,7 +175,7 @@ def api_ai_practice_plan():
     if not rounds:
         return jsonify({"error": "No rounds to analyse"}), 400
     try:
-        provider = _build_provider(request.json or {})
+        provider = _build_provider()
         prompt = prompts.practice_plan(rounds)
         def generate():
             for chunk in provider.stream(prompt):
@@ -151,7 +185,7 @@ def api_ai_practice_plan():
         return jsonify({"error": str(e)}), 500
 
 
-# ── AI provider config check ──────────────────────────────────────────────────
+# ── Provider list ─────────────────────────────────────────────────────────────
 
 @app.route("/api/providers", methods=["GET"])
 def api_providers():

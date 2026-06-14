@@ -293,7 +293,9 @@ h3 {
   padding: 20px;
   box-shadow: var(--shadow);
 }
-.ai-debrief-box h4 { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--text-muted); text-transform: uppercase; }
+.ai-debrief-box h4 { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--text-muted); text-transform: uppercase; display: flex; align-items: center; gap: 12px; }
+.btn-regen { font-size: 12px; font-weight: 500; background: none; border: 1px solid var(--border); border-radius: 5px; padding: 3px 9px; color: var(--text-muted); cursor: pointer; text-transform: none; letter-spacing: 0; }
+.btn-regen:hover { background: var(--bg); color: var(--green); border-color: var(--green-light); }
 
 /* ── Import ── */
 .import-box {

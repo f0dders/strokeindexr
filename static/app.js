@@ -1,7 +1,6 @@
 /* FairwayIQ frontend */
 
 // ── State ────────────────────────────────────────────────────────────────────
-let aiConfig = JSON.parse(localStorage.getItem("fairwayiq_ai") || "{}");
 let currentAnalysis = "performance";
 let charts = {};
 
@@ -248,9 +247,11 @@ async function showRoundDetail(id) {
       <button class="btn-danger"  id="btnDeleteRound" data-id="${r.id}">Delete Round</button>
     </div>
 
-    <div class="ai-debrief-box" id="debriefBox" style="display:none">
-      <h4>AI Round Debrief</h4>
-      <div id="debriefOutput" class="ai-output"></div>
+    <div class="ai-debrief-box" id="debriefBox" ${r.ai_debrief ? "" : 'style="display:none"'}>
+      <h4>AI Round Debrief
+        <button class="btn-regen" id="btnRegenDebrief" title="Regenerate">↺ Regenerate</button>
+      </h4>
+      <div id="debriefOutput" class="ai-output">${r.ai_debrief ? marked.parse(r.ai_debrief) : ""}</div>
     </div>
   `;
 
@@ -272,7 +273,7 @@ async function showRoundDetail(id) {
     showView("rounds");
   });
 
-  document.getElementById("btnDebriefThis").addEventListener("click", async () => {
+  async function runDebrief() {
     const box = document.getElementById("debriefBox");
     const out = document.getElementById("debriefOutput");
     box.style.display = "block";
@@ -281,7 +282,10 @@ async function showRoundDetail(id) {
     box.scrollIntoView({ behavior: "smooth" });
     await streamAI(`/api/ai/round-debrief/${r.id}`, out);
     out.classList.remove("streaming");
-  });
+  }
+
+  document.getElementById("btnDebriefThis").addEventListener("click", runDebrief);
+  document.getElementById("btnRegenDebrief").addEventListener("click", runDebrief);
 }
 
 document.getElementById("btnBackToRounds").addEventListener("click", () => showView("rounds"));
@@ -338,17 +342,12 @@ document.getElementById("btnRunAi").addEventListener("click", async () => {
 
 // ── AI streaming helper ───────────────────────────────────────────────────────
 async function streamAI(endpoint, outputEl) {
-  const config = {
-    provider: aiConfig.provider || "claude",
-    api_key: aiConfig.api_key || "",
-    model: aiConfig.model || "",
-    base_url: aiConfig.base_url || "",
-  };
   try {
+    // Config is read server-side from data/config.json — no keys sent over the wire
     const resp = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(config),
+      body: JSON.stringify({}),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: resp.statusText }));
@@ -383,26 +382,43 @@ function updateSettingsFields() {
 
 document.getElementById("aiProvider").addEventListener("change", updateSettingsFields);
 
-document.getElementById("btnSettings").addEventListener("click", () => {
-  document.getElementById("aiProvider").value = aiConfig.provider || "claude";
-  document.getElementById("aiApiKey").value   = aiConfig.api_key  || "";
-  document.getElementById("aiModel").value    = aiConfig.model    || "";
-  document.getElementById("aiBaseUrl").value  = aiConfig.base_url || "";
+document.getElementById("btnSettings").addEventListener("click", async () => {
+  // Load current config from server — key is masked (bullets) for display
+  try {
+    const cfg = await apiFetch("/api/config").then(r => r.json());
+    document.getElementById("aiProvider").value = cfg.provider || "claude";
+    document.getElementById("aiApiKey").value   = cfg.api_key  || "";
+    document.getElementById("aiModel").value    = cfg.model    || "";
+    document.getElementById("aiBaseUrl").value  = cfg.base_url || "";
+  } catch (_) {}
   updateSettingsFields();
   modal.classList.remove("hidden");
 });
 
 document.getElementById("btnCancelSettings").addEventListener("click", () => modal.classList.add("hidden"));
 
-document.getElementById("btnSaveSettings").addEventListener("click", () => {
-  aiConfig = {
-    provider: document.getElementById("aiProvider").value,
-    api_key:  document.getElementById("aiApiKey").value,
-    model:    document.getElementById("aiModel").value,
-    base_url: document.getElementById("aiBaseUrl").value,
-  };
-  localStorage.setItem("fairwayiq_ai", JSON.stringify(aiConfig));
-  modal.classList.add("hidden");
+document.getElementById("btnSaveSettings").addEventListener("click", async () => {
+  const btn = document.getElementById("btnSaveSettings");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  try {
+    await apiFetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: document.getElementById("aiProvider").value,
+        api_key:  document.getElementById("aiApiKey").value,
+        model:    document.getElementById("aiModel").value,
+        base_url: document.getElementById("aiBaseUrl").value,
+      }),
+    });
+    modal.classList.add("hidden");
+  } catch (e) {
+    alert("Failed to save settings: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save";
+  }
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
