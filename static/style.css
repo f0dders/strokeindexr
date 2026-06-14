@@ -178,19 +178,30 @@ h3 {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 20px 12px;
+  padding: 12px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
   transition: border-color .15s, box-shadow .15s;
   box-shadow: var(--shadow);
 }
 .round-row-main {
   display: grid;
-  grid-template-columns: 110px 1fr auto auto auto;
+  grid-template-columns: 100px 1fr auto auto;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+}
+.round-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.round-score-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
 }
 .round-row:hover {
   border-color: var(--green-light);
@@ -1102,6 +1113,6 @@ h3 {
   .content { margin-left: 0; padding: 16px; }
   .charts-grid { grid-template-columns: 1fr; }
   .round-row-main { grid-template-columns: 1fr auto; }
-  .round-holes, .round-date { display: none; }
+  .round-meta, .round-date { display: none; }
   .hs-cell { width: 16px; height: 16px; font-size: 9px; }
 }

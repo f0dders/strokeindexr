@@ -479,11 +479,15 @@ async function loadRounds() {
       <div class="round-row-main">
         <span class="round-date">${fmtDate(r.date)}</span>
         <span class="round-course">${r.course || "Unknown Course"}</span>
-        <span class="round-holes">${r.holes || "?"} holes</span>
-        ${r.tee_colour ? `<span class="round-tee">${teeBadge(r.tee_colour)}</span>` : ""}
-        ${r.handicap_excluded || (r.holes !== 9 && r.holes !== 18) ? `<span class="hcp-excluded-badge" title="${r.holes !== 9 && r.holes !== 18 ? `Non-standard (${r.holes}H)` : "Manually excluded"}">WHS excl.</span>` : ""}
-        <span class="round-score">${r.score ?? "—"}</span>
-        ${scoreLabel(r.score_vs_par)}
+        <div class="round-meta">
+          <span class="round-holes">${r.holes || "?"} holes</span>
+          ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
+          ${r.handicap_excluded || (r.holes !== 9 && r.holes !== 18) ? `<span class="hcp-excluded-badge" title="${r.holes !== 9 && r.holes !== 18 ? `Non-standard (${r.holes}H)` : "Manually excluded"}">WHS excl.</span>` : ""}
+        </div>
+        <div class="round-score-group">
+          <span class="round-score">${r.score ?? "—"}</span>
+          ${scoreLabel(r.score_vs_par)}
+        </div>
       </div>
       ${holeStripHTML(r.holes_json)}
     </div>
