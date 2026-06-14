@@ -166,6 +166,11 @@ h3 {
 .chart-card.wide {
   grid-column: 1 / -1;
 }
+.chart-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 2px 0 12px;
+}
 
 /* ── Rounds list ── */
 .rounds-list { display: flex; flex-direction: column; gap: 12px; }
@@ -623,11 +628,46 @@ h3 {
   line-height: 1.7;
   box-shadow: var(--shadow);
 }
-.ai-output h1, .ai-output h2, .ai-output h3 { color: var(--green); margin: 16px 0 8px; }
-.ai-output ul, .ai-output ol { padding-left: 20px; margin: 8px 0; }
-.ai-output li { margin-bottom: 4px; }
-.ai-output p { margin-bottom: 10px; }
+.ai-output h1 { font-size: 20px; margin: 20px 0 10px; color: var(--green); }
+.ai-output h2 { font-size: 17px; margin: 18px 0 8px; color: var(--green); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.ai-output h3 { font-size: 15px; margin: 14px 0 6px; color: var(--text); }
+.ai-output ul, .ai-output ol { padding-left: 22px; margin: 6px 0 12px; }
+.ai-output li { margin-bottom: 5px; line-height: 1.6; }
+.ai-output p { margin-bottom: 12px; line-height: 1.7; }
 .ai-output strong { color: var(--text); }
+.ai-output hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.ai-output blockquote {
+  border-left: 3px solid var(--green-light);
+  margin: 12px 0;
+  padding: 6px 14px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-radius: 0 6px 6px 0;
+}
+.ai-output table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0 18px;
+  font-size: 13px;
+}
+.ai-output th {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.ai-output td {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.ai-output tr:nth-child(even) td { background: var(--bg); }
 .ai-output.streaming { border-color: var(--green-light); }
 .ai-placeholder { color: var(--text-muted); font-style: italic; }
 
