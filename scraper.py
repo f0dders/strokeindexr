@@ -61,6 +61,12 @@ def _parse_scorecard(data: dict) -> dict:
             out["up_and_down_pct"] = round(saved / len(gir_missed) * 100, 1)
             out["scrambling_pct"]  = out["up_and_down_pct"]
 
+        # Sand saves — holes where bunker was played; did player still make par or better?
+        bunker_holes = [h for h in holes if (h["hole_score"].get("total_of_sand_shots") or 0) > 0]
+        if bunker_holes:
+            sand_saved = sum(1 for h in bunker_holes if h["hole_score"]["total_of_strokes"] <= h["hole_tee"]["par"])
+            out["sand_saves_pct"] = round(sand_saved / len(bunker_holes) * 100, 1)
+
         # Fairways (only par 4s/5s eligible)
         fir_eligible = [h for h in holes if h["hole_tee"]["par"] >= 4 and h["hole_score"].get("fairway_hit") is not None]
         if fir_eligible:
