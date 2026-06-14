@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FairwayIQ</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="brand">
+      <span class="brand-icon">⛳</span>
+      <span class="brand-name">FairwayIQ</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#" data-view="dashboard" class="active">Dashboard</a></li>
+      <li><a href="#" data-view="rounds">Round History</a></li>
+      <li><a href="#" data-view="import">Import Round</a></li>
+      <li><a href="#" data-view="ai">AI Analysis</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <button class="btn-settings" id="btnSettings">⚙ AI Settings</button>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <!-- ── DASHBOARD ── -->
+    <section id="view-dashboard" class="view active">
+      <h1>Dashboard</h1>
+      <div class="stat-cards" id="statCards"></div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Score vs Par</h3>
+          <canvas id="chartScore"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Handicap Index</h3>
+          <canvas id="chartHcp"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Greens in Regulation %</h3>
+          <canvas id="chartGir"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Putts per Round</h3>
+          <canvas id="chartPutts"></canvas>
+        </div>
+        <div class="chart-card wide">
+          <h3>Score Distribution (latest round)</h3>
+          <canvas id="chartDist"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ROUNDS ── -->
+    <section id="view-rounds" class="view">
+      <h1>Round History</h1>
+      <div id="roundsList" class="rounds-list"></div>
+    </section>
+
+    <!-- ── ROUND DETAIL ── -->
+    <section id="view-round-detail" class="view">
+      <button class="btn-back" id="btnBackToRounds">← Back to History</button>
+      <div id="roundDetail"></div>
+    </section>
+
+    <!-- ── IMPORT ── -->
+    <section id="view-import" class="view">
+      <h1>Import Round</h1>
+      <p class="subtitle">Paste a Hole19 round URL to import all stats automatically.</p>
+      <div class="import-box">
+        <input type="url" id="importUrl" placeholder="https://www.hole19golf.com/performance/rounds/XXXXXX" />
+        <button class="btn-primary" id="btnImport">Import</button>
+      </div>
+      <div id="importStatus" class="import-status"></div>
+    </section>
+
+    <!-- ── AI ANALYSIS ── -->
+    <section id="view-ai" class="view">
+      <h1>AI Analysis</h1>
+      <div class="ai-tabs">
+        <button class="ai-tab active" data-analysis="performance">Performance Summary</button>
+        <button class="ai-tab" data-analysis="practice">Practice Plan</button>
+      </div>
+      <div class="ai-actions">
+        <button class="btn-primary" id="btnRunAi">Generate Analysis</button>
+      </div>
+      <div id="aiOutput" class="ai-output"></div>
+    </section>
+
+  </main>
+
+  <!-- ── AI SETTINGS MODAL ── -->
+  <div id="modalSettings" class="modal hidden">
+    <div class="modal-box">
+      <h2>AI Settings</h2>
+      <label>Provider
+        <select id="aiProvider">
+          <option value="claude">Claude (Anthropic)</option>
+          <option value="openai">OpenAI</option>
+          <option value="gemini">Gemini</option>
+          <option value="groq">Groq</option>
+          <option value="mistral">Mistral</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="ollama">Ollama (local)</option>
+          <option value="lmstudio">LM Studio (local)</option>
+        </select>
+      </label>
+      <label id="labelApiKey">API Key
+        <input type="password" id="aiApiKey" placeholder="sk-..." />
+      </label>
+      <label>Model (leave blank for default)
+        <input type="text" id="aiModel" placeholder="e.g. claude-sonnet-4-6" />
+      </label>
+      <label id="labelBaseUrl" class="hidden">Base URL
+        <input type="text" id="aiBaseUrl" placeholder="http://localhost:11434" />
+      </label>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="btnCancelSettings">Cancel</button>
+        <button class="btn-primary" id="btnSaveSettings">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
