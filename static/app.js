@@ -84,7 +84,7 @@ async function loadDashboard() {
   ]);
 
   renderStatCards(summary, whs);
-  renderCharts(trends, whs);
+  renderCharts(trends, whs, summary);
   renderGlobalSummary(globalSummary.performance);
 }
 
@@ -202,7 +202,7 @@ function mkChartMulti(id, datasets, labels) {
   });
 }
 
-function renderCharts(trends, whs) {
+function renderCharts(trends, whs, summary = {}) {
   if (!trends.length) return;
   const labels = trends.map(r => fmtDate(r.date));
   mkChart("chartScore", "Score vs Par", trends.map(r => r.score_vs_par), labels, "#c0392b");
@@ -239,7 +239,7 @@ function renderCharts(trends, whs) {
   mkChart("chartGir",    "GIR %",         trends.map(r => r.gir_hit_pct),  labels, "#52b788");
   mkChart("chartPutts",  "Putts",         trends.map(r => r.putts),        labels, "#b7950b");
 
-  // Score distribution doughnut for latest round
+  // Score distribution — latest round + overall average overlay
   const latest = trends[trends.length - 1];
   if (charts["chartDist"]) charts["chartDist"].destroy();
   const ctx = document.getElementById("chartDist");
@@ -248,21 +248,44 @@ function renderCharts(trends, whs) {
       type: "bar",
       data: {
         labels: ["Eagles", "Birdies", "Pars", "Bogeys", "Doubles+"],
-        datasets: [{
-          data: [
-            latest.eagles_pct   ?? 0,
-            latest.birdies_pct  ?? 0,
-            latest.pars_pct     ?? 0,
-            latest.bogeys_pct   ?? 0,
-            latest.doubles_plus_pct ?? 0,
-          ],
-          backgroundColor: ["#f4d03f","#52b788","#2d6a4f","#e67e22","#c0392b"],
-          borderRadius: 6,
-        }]
+        datasets: [
+          {
+            label: "Latest round",
+            data: [
+              latest.eagles_pct       ?? 0,
+              latest.birdies_pct      ?? 0,
+              latest.pars_pct         ?? 0,
+              latest.bogeys_pct       ?? 0,
+              latest.doubles_plus_pct ?? 0,
+            ],
+            backgroundColor: ["#f4d03f","#52b788","#2d6a4f","#e67e22","#c0392b"],
+            borderRadius: 6,
+            order: 1,
+          },
+          {
+            label: "All-round average",
+            data: [
+              summary.avg_eagles_pct       ?? 0,
+              summary.avg_birdies_pct      ?? 0,
+              summary.avg_pars_pct         ?? 0,
+              summary.avg_bogeys_pct       ?? 0,
+              summary.avg_doubles_plus_pct ?? 0,
+            ],
+            backgroundColor: "rgba(100,116,139,0.18)",
+            borderColor:     "rgba(100,116,139,0.5)",
+            borderWidth: 2,
+            borderRadius: 6,
+            borderDash: [4, 3],
+            order: 2,
+          }
+        ]
       },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: true, position: "top", labels: { boxWidth: 12, font: { size: 12 } } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
+        },
         scales: {
           y: { ticks: { callback: v => v + "%" }, grid: { color: "#e8eee8" } },
           x: { grid: { display: false } }

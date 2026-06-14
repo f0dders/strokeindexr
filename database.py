@@ -519,6 +519,11 @@ def get_stats_summary() -> dict:
                 AVG(fairway_hit_pct) as avg_fir,
                 AVG(up_and_down_pct) as avg_up_and_down,
                 MIN(score_vs_par) as best_score_vs_par,
+                AVG(eagles_pct) as avg_eagles_pct,
+                AVG(birdies_pct) as avg_birdies_pct,
+                AVG(pars_pct) as avg_pars_pct,
+                AVG(bogeys_pct) as avg_bogeys_pct,
+                AVG(doubles_plus_pct) as avg_doubles_plus_pct,
                 (SELECT handicap FROM rounds ORDER BY date DESC, imported_at DESC LIMIT 1) as latest_handicap
             FROM rounds
         """).fetchone()
