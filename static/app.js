@@ -15,6 +15,7 @@ function showView(name) {
 
   if (name === "dashboard") loadDashboard();
   if (name === "rounds") loadRounds();
+  if (name === "ai") loadAiAnalysis();
 }
 
 document.querySelectorAll(".nav-links a").forEach(a => {
@@ -49,13 +50,55 @@ async function apiFetch(path, opts = {}) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
-  const [summary, trends] = await Promise.all([
+  const [summary, trends, globalSummary] = await Promise.all([
     apiFetch("/api/stats/summary").then(r => r.json()),
     apiFetch("/api/stats/trends").then(r => r.json()),
+    apiFetch("/api/ai/global-summary").then(r => r.json()),
   ]);
 
   renderStatCards(summary);
   renderCharts(trends);
+  renderGlobalSummary(globalSummary.performance);
+}
+
+function renderGlobalSummary(gs) {
+  const el = document.getElementById("globalSummary");
+  if (!el) return;
+
+  if (!gs) {
+    el.innerHTML = `
+      <p class="ai-placeholder" style="margin-bottom:12px">No AI summary yet.</p>
+      <button class="btn-primary" id="btnGenGlobalNow">Generate Summary Now</button>
+    `;
+    document.getElementById("btnGenGlobalNow").addEventListener("click", async () => {
+      el.innerHTML = `<p class="ai-placeholder">Generating summary…</p>`;
+      const r = await apiFetch("/api/ai/global-summary", { method: "POST" });
+      if (r.ok) { const reader = r.body.getReader(); while (!(await reader.read()).done) {} }
+      loadDashboard();
+    });
+    return;
+  }
+
+  const updated = gs.generated_at
+    ? `<span class="gs-updated">Updated ${gs.generated_at.split("T")[0] || gs.generated_at.substring(0,10)}</span>`
+    : "";
+
+  el.innerHTML = `
+    <div class="gs-snapshot">${gs.short_summary || ""}</div>
+    ${updated}
+    ${gs.full_report ? `
+      <button class="btn-toggle-report" id="btnToggleReport">Show full report ↓</button>
+      <div class="gs-full-report hidden" id="gsFullReport">
+        ${marked.parse(gs.full_report)}
+      </div>
+    ` : ""}
+  `;
+
+  document.getElementById("btnToggleReport")?.addEventListener("click", function() {
+    const rep = document.getElementById("gsFullReport");
+    rep.classList.toggle("hidden");
+    this.textContent = rep.classList.contains("hidden") ? "Show full report ↓" : "Hide full report ↑";
+  });
 }
 
 function renderStatCards(s) {
@@ -363,6 +406,7 @@ async function showRoundDetail(id) {
         ${r.duration ? `<span>⏱ ${r.duration}</span>` : ""}
         ${r.distance_miles ? `<span>🚶 ${r.distance_miles} miles</span>` : ""}
       </div>
+      ${r.ai_short_summary ? `<p class="round-short-summary">${r.ai_short_summary}</p>` : ""}
     </div>
 
     <div class="detail-grid">
@@ -417,15 +461,16 @@ async function showRoundDetail(id) {
     </div>
 
     <div class="detail-actions">
-      <button class="btn-primary" id="btnDebriefThis" data-id="${r.id}">⚡ AI Round Debrief</button>
+      <button class="btn-primary" id="btnDebriefThis" data-id="${r.id}">⚡ ${r.ai_debrief ? "Regenerate AI Debrief" : "Generate AI Debrief"}</button>
+      ${r.hole19_url ? `<button class="btn-secondary" id="btnReimport" data-id="${r.id}">↻ Re-import from Hole19</button>` : ""}
       <button class="btn-danger"  id="btnDeleteRound" data-id="${r.id}">Delete Round</button>
     </div>
 
     <div class="ai-debrief-box" id="debriefBox" ${r.ai_debrief ? "" : 'style="display:none"'}>
-      <h4>AI Round Debrief
-        <button class="btn-regen" id="btnRegenDebrief" title="Regenerate">↺ Regenerate</button>
-      </h4>
-      <div id="debriefOutput" class="ai-output">${r.ai_debrief ? marked.parse(r.ai_debrief) : ""}</div>
+      <button class="btn-toggle-report" id="btnToggleDebrief">
+        ${r.ai_debrief ? "Show full debrief ↓" : ""}
+      </button>
+      <div id="debriefOutput" class="ai-output hidden">${r.ai_debrief ? marked.parse(r.ai_debrief) : ""}</div>
     </div>
   `;
 
@@ -450,19 +495,50 @@ async function showRoundDetail(id) {
     showView("rounds");
   });
 
+  document.getElementById("btnReimport")?.addEventListener("click", async () => {
+    const btn = document.getElementById("btnReimport");
+    btn.disabled = true;
+    btn.textContent = "Re-importing…";
+    try {
+      const res = await apiFetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: r.hole19_url, overwrite: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Re-import failed");
+      // Reload the detail view with fresh data
+      showRoundDetail(data.id);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "↻ Re-import from Hole19";
+      alert(`Re-import failed: ${e.message}`);
+    }
+  });
+
   async function runDebrief() {
     const box = document.getElementById("debriefBox");
     const out = document.getElementById("debriefOutput");
+    const toggleBtn = document.getElementById("btnToggleDebrief");
     box.style.display = "block";
+    out.classList.remove("hidden");
     out.classList.add("streaming");
     out.innerHTML = '<span class="ai-placeholder">Generating debrief…</span>';
+    if (toggleBtn) toggleBtn.textContent = "Hide full debrief ↑";
     box.scrollIntoView({ behavior: "smooth" });
     await streamAI(`/api/ai/round-debrief/${r.id}`, out);
     out.classList.remove("streaming");
+    if (toggleBtn) toggleBtn.textContent = "Hide full debrief ↑";
+    document.getElementById("btnDebriefThis").textContent = "Regenerate AI Debrief";
   }
 
   document.getElementById("btnDebriefThis").addEventListener("click", runDebrief);
-  document.getElementById("btnRegenDebrief").addEventListener("click", runDebrief);
+
+  document.getElementById("btnToggleDebrief")?.addEventListener("click", function() {
+    const out = document.getElementById("debriefOutput");
+    out.classList.toggle("hidden");
+    this.textContent = out.classList.contains("hidden") ? "Show full debrief ↓" : "Hide full debrief ↑";
+  });
 }
 
 document.getElementById("btnBackToRounds").addEventListener("click", () => showView("rounds"));
@@ -478,84 +554,172 @@ document.querySelectorAll(".import-tab").forEach(tab => {
   });
 });
 
+// ── Import helpers ────────────────────────────────────────────────────────────
+function importAiEnabled() {
+  return document.getElementById("chkImportAi")?.checked;
+}
+
+function setImportStatus(cls, html) {
+  const el = document.getElementById("importStatus");
+  el.className = "import-status " + cls;
+  el.innerHTML = html;
+}
+
+function showDuplicatePrompt(existing, onReplace) {
+  const d = fmtDate(existing.date);
+  const vsP = existing.score_vs_par != null
+    ? ` (${existing.score_vs_par >= 0 ? "+" : ""}${existing.score_vs_par})`
+    : "";
+  setImportStatus("warn", `
+    <div class="dup-prompt">
+      <strong>Round already imported:</strong> ${existing.course} on ${d}, score ${existing.score ?? "—"}${vsP}
+      <div class="dup-actions">
+        <button class="btn-primary btn-sm" id="btnDupReplace">Replace with new data</button>
+        <button class="btn-secondary btn-sm" id="btnDupKeep">Keep existing</button>
+      </div>
+    </div>
+  `);
+  document.getElementById("btnDupReplace").addEventListener("click", onReplace);
+  document.getElementById("btnDupKeep").addEventListener("click", () => {
+    setImportStatus("", "");
+  });
+}
+
+async function runPostImportAi(roundId, statusPrefix) {
+  // Step: short summary
+  setImportStatus("loading", `${statusPrefix} Generating round summary…`);
+  const sr = await apiFetch(`/api/ai/round-short-summary/${roundId}`, { method: "POST" });
+  if (!sr.ok) {
+    const e = await sr.json().catch(() => ({}));
+    setImportStatus("error", `✗ AI summary failed: ${e.error || sr.statusText}`);
+    return;
+  }
+
+  // Step: global summary (streams, we just wait for completion)
+  setImportStatus("loading", `${statusPrefix} Updating overall analysis…`);
+  const gr = await apiFetch("/api/ai/global-summary", { method: "POST" });
+  if (gr.ok) {
+    // Drain the stream so save_global_summary fires server-side
+    const reader = gr.body.getReader();
+    while (!(await reader.read()).done) {}
+  }
+}
+
 // ── Import from URL ───────────────────────────────────────────────────────────
-document.getElementById("btnImport").addEventListener("click", async () => {
-  const url = document.getElementById("importUrl").value.trim();
-  const status = document.getElementById("importStatus");
-  if (!url) return;
-
-  status.className = "import-status loading";
-  status.textContent = "Fetching round data from Hole19…";
+async function doUrlImport(url, overwrite = false) {
+  const useAi = importAiEnabled();
   document.getElementById("btnImport").disabled = true;
-
+  setImportStatus("loading", "Fetching round data from Hole19…");
   try {
     const r = await apiFetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, overwrite }),
     });
     const data = await r.json();
+    if (r.status === 409 && data.duplicate) {
+      document.getElementById("btnImport").disabled = false;
+      showDuplicatePrompt(data.existing, () => doUrlImport(url, true));
+      return;
+    }
     if (!r.ok) throw new Error(data.error || "Import failed");
-    status.className = "import-status success";
-    status.textContent = `✓ Round imported: ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)}`;
+    const prefix = `✓ ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)} imported.`;
+    if (useAi) {
+      await runPostImportAi(data.id, prefix);
+      setImportStatus("success", `${prefix} AI analysis ready.`);
+    } else {
+      setImportStatus("success", prefix);
+    }
     document.getElementById("importUrl").value = "";
   } catch (e) {
-    status.className = "import-status error";
-    status.textContent = `✗ ${e.message}`;
+    setImportStatus("error", `✗ ${e.message}`);
   } finally {
     document.getElementById("btnImport").disabled = false;
   }
+}
+
+document.getElementById("btnImport").addEventListener("click", () => {
+  const url = document.getElementById("importUrl").value.trim();
+  if (url) doUrlImport(url);
 });
 
 // ── Import from email ─────────────────────────────────────────────────────────
-document.getElementById("btnImportEmail").addEventListener("click", async () => {
-  const text = document.getElementById("importEmailText").value.trim();
-  const status = document.getElementById("importStatus");
-  if (!text) return;
-
-  status.className = "import-status loading";
-  status.textContent = "Extracting stats from email using AI…";
+async function doEmailImport(text, overwrite = false) {
+  const useAi = importAiEnabled();
   document.getElementById("btnImportEmail").disabled = true;
-
+  setImportStatus("loading", "Extracting stats from email…");
   try {
     const r = await apiFetch("/api/import/email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, overwrite }),
     });
     const data = await r.json();
+    if (r.status === 409 && data.duplicate) {
+      document.getElementById("btnImportEmail").disabled = false;
+      showDuplicatePrompt(data.existing, () => doEmailImport(text, true));
+      return;
+    }
     if (!r.ok) throw new Error(data.error || "Import failed");
     const method = data.method === "ai" ? " (via AI extraction)" : "";
-    status.className = "import-status success";
-    status.textContent = `✓ Round imported${method}: ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)}`;
+    const prefix = `✓ ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)} imported${method}.`;
+    if (useAi) {
+      await runPostImportAi(data.id, prefix);
+      setImportStatus("success", `${prefix} AI analysis ready.`);
+    } else {
+      setImportStatus("success", prefix);
+    }
     document.getElementById("importEmailText").value = "";
   } catch (e) {
-    status.className = "import-status error";
-    status.textContent = `✗ ${e.message}`;
+    setImportStatus("error", `✗ ${e.message}`);
   } finally {
     document.getElementById("btnImportEmail").disabled = false;
   }
+}
+
+document.getElementById("btnImportEmail").addEventListener("click", () => {
+  const text = document.getElementById("importEmailText").value.trim();
+  if (text) doEmailImport(text);
 });
 
 // ── AI Analysis ───────────────────────────────────────────────────────────────
+async function loadAiAnalysis() {
+  const gs = await apiFetch("/api/ai/global-summary").then(r => r.json());
+  const stored = gs.performance;
+  const out = document.getElementById("aiOutput");
+  const btn = document.getElementById("btnRunAi");
+  if (stored?.full_report) {
+    const updated = stored.generated_at
+      ? ` <span class="gs-updated">Generated ${stored.generated_at.substring(0,10)}</span>` : "";
+    out.innerHTML = marked.parse(stored.full_report) + updated;
+    btn.textContent = "↺ Regenerate";
+  } else {
+    out.innerHTML = '<span class="ai-placeholder">No analysis yet — click Generate to create one.</span>';
+    btn.textContent = "Generate Analysis";
+  }
+}
+
 document.querySelectorAll(".ai-tab").forEach(tab => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".ai-tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
     currentAnalysis = tab.dataset.analysis;
-    document.getElementById("aiOutput").innerHTML = '<span class="ai-placeholder">Click Generate Analysis to start.</span>';
+    document.getElementById("aiOutput").innerHTML = '<span class="ai-placeholder">Click Generate to start.</span>';
   });
 });
 
 document.getElementById("btnRunAi").addEventListener("click", async () => {
   const out = document.getElementById("aiOutput");
   const endpoint = currentAnalysis === "performance"
-    ? "/api/ai/performance-summary"
+    ? "/api/ai/global-summary"
     : "/api/ai/practice-plan";
   out.classList.add("streaming");
   out.innerHTML = '<span class="ai-placeholder">Generating…</span>';
+  document.getElementById("btnRunAi").disabled = true;
   await streamAI(endpoint, out);
   out.classList.remove("streaming");
+  document.getElementById("btnRunAi").disabled = false;
+  document.getElementById("btnRunAi").textContent = "↺ Regenerate";
 });
 
 // ── AI streaming helper ───────────────────────────────────────────────────────
@@ -581,6 +745,11 @@ async function streamAI(endpoint, outputEl) {
       if (done) break;
       raw += decoder.decode(value, { stream: true });
       outputEl.innerHTML = marked.parse(raw);
+    }
+    // Check for server-side error sentinel emitted mid-stream
+    const errMatch = raw.match(/__AI_ERROR__: (.+)/);
+    if (errMatch) {
+      outputEl.innerHTML = `<span style="color:var(--red)">AI error: ${errMatch[1]}</span>`;
     }
   } catch (e) {
     outputEl.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;

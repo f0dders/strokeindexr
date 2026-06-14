@@ -633,6 +633,94 @@ h3 {
   margin-top: 20px;
 }
 
+/* ── Global summary card (dashboard) ── */
+.global-summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--green-light);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow);
+}
+.gs-snapshot {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.gs-updated {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: 14px;
+}
+.btn-toggle-report {
+  font-size: 12px;
+  font-weight: 500;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-top: 6px;
+}
+.btn-toggle-report:hover { border-color: var(--green-light); color: var(--green); }
+.gs-full-report {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* ── Round short summary ── */
+.round-short-summary {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin-top: 10px;
+  padding: 12px 16px;
+  background: var(--bg);
+  border-left: 3px solid var(--green-light);
+  border-radius: 0 6px 6px 0;
+}
+
+/* ── Import AI toggle ── */
+.import-ai-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+.ai-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+.ai-toggle-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--green); cursor: pointer; }
+.ai-toggle-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 6px 0 0 26px;
+}
+
+/* ── Duplicate round prompt ── */
+.import-status.warn {
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  border-color: var(--gold);
+  color: var(--text);
+  display: block;
+}
+.dup-prompt { line-height: 1.6; }
+.dup-actions { display: flex; gap: 10px; margin-top: 12px; }
+.btn-sm { padding: 7px 14px; font-size: 13px; }
+
 /* ── Misc ── */
 .hidden { display: none !important; }
 

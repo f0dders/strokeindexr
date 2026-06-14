@@ -48,6 +48,35 @@ Rules:
 - Return ONLY the JSON block, no other text"""
 
 
+def round_short_summary(round_data: dict) -> str:
+    r = round_data
+    return f"""You are a golf coach. Summarise this round in exactly 2-3 sentences. Be specific to the numbers. Mention the score, one standout positive, and one area to work on.
+
+Round: {r.get('date')} | {r.get('course')} | {r.get('holes')} holes
+Score: {r.get('score')} ({'+' if (r.get('score_vs_par') or 0) >= 0 else ''}{r.get('score_vs_par')} vs par {r.get('par')})
+Putts: {r.get('putts')} | GIR: {r.get('gir_hit_pct')}% | FIR: {r.get('fairway_hit_pct')}%
+Doubles+: {r.get('doubles_plus_pct')}% | Up & Down: {r.get('up_and_down_pct')}%
+
+Return only the 2-3 sentence summary. No headers, no bullet points."""
+
+
+def global_short_summary(rounds: list[dict]) -> str:
+    n = len(rounds)
+    recent = rounds[-5:]
+    avg_vs_par = sum(r.get("score_vs_par") or 0 for r in recent) / len(recent)
+    avg_gir = sum(r.get("gir_hit_pct") or 0 for r in recent) / len(recent)
+    avg_putts = sum(r.get("putts") or 0 for r in recent) / len(recent)
+    latest_hcp = rounds[-1].get("handicap") if rounds else "?"
+    earliest_hcp = rounds[0].get("handicap") if rounds else "?"
+
+    return f"""You are a golf coach. Based on {n} rounds of data, write a 2-3 sentence overall performance snapshot for the player's dashboard. Be direct and specific. Mention handicap trajectory, a key strength, and the single biggest area to improve.
+
+Data: {n} rounds tracked | Handicap: {earliest_hcp} → {latest_hcp}
+Last 5 rounds avg: {avg_vs_par:+.1f} vs par | {avg_gir:.0f}% GIR | {avg_putts:.0f} putts
+
+Return only the 2-3 sentence summary. No headers, no bullet points."""
+
+
 def round_debrief(round_data: dict) -> str:
     r = round_data
     return f"""You are an experienced golf coach and performance analyst. Analyse this golf round and provide a concise, actionable debrief.

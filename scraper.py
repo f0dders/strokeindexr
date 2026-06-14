@@ -24,7 +24,7 @@ def _parse_scorecard(data: dict) -> dict:
     out["course"] = data.get("course_name")
     out["par"] = data.get("course_par")
     out["holes"] = data.get("holes_number")
-    out["handicap"] = data.get("playing_hcp")
+    out["playing_hcp"] = data.get("playing_hcp")
 
     played = data.get("played_date", "")
     if played:
@@ -175,8 +175,21 @@ def scrape_round(url: str) -> dict:
         for k, v in fallback.items():
             data.setdefault(k, v)
 
-    # Distance and duration from page text
+    # Handicap index from page HTML (actual HCP, not playing HCP which is halved for 9 holes)
     full_text = resp.text
+    hcp_m = re.search(
+        r'cell handicap[^>]*>.*?<[^>]+class="cell-value[^"]*"[^>]*>\s*([\d.]+)\s*</[^>]+>.*?HANDICAP',
+        full_text, re.S | re.I
+    )
+    if not hcp_m:
+        # Alternative: plain text scan for the pattern Hole19 uses in the stats header
+        hcp_m2 = re.search(r'"cell handicap"[^{]*?([\d]+\.?\d*)</p>\s*<p[^>]*>\s*HANDICAP', full_text, re.S | re.I)
+        if hcp_m2:
+            data["handicap"] = float(hcp_m2.group(1))
+    else:
+        data["handicap"] = float(hcp_m.group(1))
+
+    # Distance and duration from page text
     dist_m = re.search(r"([\d.]+)\s*miles?", full_text, re.I)
     if dist_m:
         data.setdefault("distance_miles", float(dist_m.group(1)))

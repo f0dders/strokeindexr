@@ -63,12 +63,55 @@ def init_db():
                 holes_json TEXT
             )
         """)
-        for col, typedef in [("ai_debrief", "TEXT"), ("holes_json", "TEXT")]:
+        for col, typedef in [
+            ("ai_debrief", "TEXT"),
+            ("holes_json", "TEXT"),
+            ("playing_hcp", "REAL"),
+            ("ai_short_summary", "TEXT"),
+        ]:
             try:
                 conn.execute(f"ALTER TABLE rounds ADD COLUMN {col} {typedef}")
             except Exception:
                 pass
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS global_summaries (
+                type TEXT PRIMARY KEY,
+                short_summary TEXT,
+                full_report TEXT,
+                generated_at TEXT
+            )
+        """)
         conn.commit()
+
+
+def find_duplicate(data: dict) -> dict | None:
+    """Return existing round if data matches an already-imported round."""
+    with get_conn() as conn:
+        # URL import: match on hole19_id
+        if data.get("hole19_id"):
+            row = conn.execute(
+                "SELECT * FROM rounds WHERE hole19_id = ?", (data["hole19_id"],)
+            ).fetchone()
+            if row:
+                return dict(row)
+        # Email import: match on date + course (case-insensitive)
+        if data.get("date") and data.get("course"):
+            row = conn.execute(
+                "SELECT * FROM rounds WHERE date = ? AND LOWER(course) = LOWER(?)",
+                (data["date"], data["course"]),
+            ).fetchone()
+            if row:
+                return dict(row)
+    return None
+
+
+def replace_round(existing_id: int, data: dict) -> int:
+    """Delete existing round and insert replacement, returning new id."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM rounds WHERE id = ?", (existing_id,))
+        conn.commit()
+    return insert_round(data)
 
 
 def insert_round(data: dict) -> int:
@@ -107,6 +150,33 @@ def delete_round(round_id: int):
 def update_notes(round_id: int, notes: str):
     with get_conn() as conn:
         conn.execute("UPDATE rounds SET notes = ? WHERE id = ?", (notes, round_id))
+        conn.commit()
+
+
+def save_short_summary(round_id: int, text: str):
+    with get_conn() as conn:
+        conn.execute("UPDATE rounds SET ai_short_summary = ? WHERE id = ?", (text, round_id))
+        conn.commit()
+
+
+def get_global_summary(summary_type: str = "performance") -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM global_summaries WHERE type = ?", (summary_type,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_global_summary(summary_type: str, short_summary: str, full_report: str):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO global_summaries (type, short_summary, full_report, generated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(type) DO UPDATE SET
+                short_summary = excluded.short_summary,
+                full_report   = excluded.full_report,
+                generated_at  = excluded.generated_at
+        """, (summary_type, short_summary, full_report))
         conn.commit()
 
 

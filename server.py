@@ -2,8 +2,11 @@
 
 from flask import Flask, request, jsonify, Response, send_from_directory
 from database import (
-    init_db, insert_round, get_rounds, get_round, delete_round,
-    update_notes, save_debrief, get_stats_summary, get_trend_data,
+    init_db, insert_round, replace_round, find_duplicate,
+    get_rounds, get_round, delete_round,
+    update_notes, save_debrief, save_short_summary,
+    get_global_summary, save_global_summary,
+    get_stats_summary, get_trend_data,
     load_config, save_config,
 )
 from scraper import scrape_round
@@ -49,16 +52,25 @@ def api_update_notes(round_id):
 
 @app.route("/api/import", methods=["POST"])
 def api_import():
-    url = (request.json or {}).get("url", "").strip()
+    body = request.json or {}
+    url = body.get("url", "").strip()
+    overwrite = body.get("overwrite", False)
     if not url:
         return jsonify({"error": "No URL provided"}), 400
     if "hole19golf.com" not in url:
         return jsonify({"error": "URL must be a Hole19 round URL"}), 400
     try:
         data = scrape_round(url)
-        rid = insert_round(data)
-        if not rid:
-            return jsonify({"error": "Round already imported (duplicate URL)"}), 409
+        existing = find_duplicate(data)
+        if existing and not overwrite:
+            return jsonify({"duplicate": True, "existing": {
+                "id": existing["id"], "course": existing["course"],
+                "date": existing["date"], "score": existing["score"],
+            }}), 409
+        if existing and overwrite:
+            rid = replace_round(existing["id"], data)
+        else:
+            rid = insert_round(data)
         return jsonify({"ok": True, "id": rid, "data": data})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -69,7 +81,9 @@ def api_import_email():
     """Parse a pasted Hole19 email. Uses structured parser first, AI as fallback."""
     import json as _json, re as _re
     from email_parser import parse_hole19_email
-    text = (request.json or {}).get("text", "").strip()
+    body = request.json or {}
+    text = body.get("text", "").strip()
+    overwrite = body.get("overwrite", False)
     if not text:
         return jsonify({"error": "No email text provided"}), 400
 
@@ -96,9 +110,16 @@ def api_import_email():
         return jsonify({"error": "Could not extract date or course from email"}), 422
 
     try:
-        rid = insert_round(data)
-        if not rid:
-            return jsonify({"error": "Round already imported (duplicate)"}), 409
+        existing = find_duplicate(data)
+        if existing and not overwrite:
+            return jsonify({"duplicate": True, "existing": {
+                "id": existing["id"], "course": existing["course"],
+                "date": existing["date"], "score": existing["score"],
+            }}), 409
+        if existing and overwrite:
+            rid = replace_round(existing["id"], data)
+        else:
+            rid = insert_round(data)
         return jsonify({"ok": True, "id": rid, "data": data, "method": method})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -132,9 +153,20 @@ def api_get_config():
 def api_save_config():
     incoming = request.json or {}
     cfg = load_config()
-    # Only overwrite the key if the user actually typed a new one (not the masked placeholder)
-    if incoming.get("api_key", "").strip("•"):
-        cfg["api_key"] = incoming["api_key"]
+    # Only overwrite the key if it looks like a real key:
+    # - not empty, not the masked placeholder (••••••••)
+    # - not an obvious test/placeholder value
+    # - never overwrite a real existing key with a shorter/fake one
+    _TEST_PATTERNS = ("test", "placeholder", "example", "your-key", "sk-ant-test", "sk-test")
+    new_key = incoming.get("api_key", "").strip()
+    existing_key = cfg.get("api_key", "")
+    is_masked = not new_key.strip("•")
+    is_test = any(p in new_key.lower() for p in _TEST_PATTERNS)
+    has_real_key = bool(existing_key) and not any(p in existing_key.lower() for p in _TEST_PATTERNS)
+    if new_key and not is_masked and not is_test:
+        cfg["api_key"] = new_key
+    elif is_test and has_real_key:
+        pass  # never overwrite a real key with a test value
     cfg["provider"] = incoming.get("provider", cfg.get("provider", "claude"))
     cfg["model"]    = incoming.get("model",    cfg.get("model", ""))
     cfg["base_url"] = incoming.get("base_url", cfg.get("base_url", ""))
@@ -143,6 +175,20 @@ def api_save_config():
 
 
 # ── AI API ────────────────────────────────────────────────────────────────────
+
+def _safe_stream(provider, prompt, on_complete=None):
+    """Wrap provider.stream() so errors mid-stream are surfaced to the client."""
+    try:
+        buf = []
+        for chunk in provider.stream(prompt):
+            buf.append(chunk)
+            yield chunk
+        if on_complete:
+            on_complete("".join(buf))
+    except Exception as e:
+        # Emit a sentinel the frontend can detect — double-newline then the error
+        yield f"\n\n__AI_ERROR__: {e}"
+
 
 def _build_provider():
     """Build an AI provider from the saved server-side config."""
@@ -181,14 +227,64 @@ def api_ai_round_debrief(round_id):
     try:
         provider = _build_provider()
         prompt = prompts.round_debrief(r)
+        return Response(
+            _safe_stream(provider, prompt, on_complete=lambda text: save_debrief(round_id, text)),
+            mimetype="text/plain",
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/ai/round-short-summary/<int:round_id>", methods=["POST"])
+def api_ai_round_short_summary(round_id):
+    r = get_round(round_id)
+    if not r:
+        return jsonify({"error": "Round not found"}), 404
+    try:
+        provider = _build_provider()
+        prompt = prompts.round_short_summary(r)
+        text = "".join(provider.stream(prompt))
+        if text.startswith("\n\n__AI_ERROR__"):
+            return jsonify({"error": text}), 500
+        save_short_summary(round_id, text)
+        return jsonify({"ok": True, "summary": text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/ai/global-summary", methods=["GET"])
+def api_get_global_summary():
+    return jsonify({
+        "performance": get_global_summary("performance"),
+        "practice":    get_global_summary("practice"),
+    })
+
+
+@app.route("/api/ai/global-summary", methods=["POST"])
+def api_gen_global_summary():
+    """Generate and save both short snapshot and full report for performance summary."""
+    rounds = get_rounds(limit=50)
+    if not rounds:
+        return jsonify({"error": "No rounds to analyse"}), 400
+    try:
+        provider = _build_provider()
+
+        # Short snapshot (non-streaming, fast)
+        short_text = "".join(provider.stream(prompts.global_short_summary(rounds)))
+
+        # Full report — stream to client and accumulate
+        full_chunks = []
         def generate():
-            full = []
-            for chunk in provider.stream(prompt):
-                full.append(chunk)
+            for chunk in _safe_stream(
+                provider,
+                prompts.performance_summary(rounds),
+                on_complete=lambda full: save_global_summary("performance", short_text, full),
+            ):
+                full_chunks.append(chunk)
                 yield chunk
-            # Persist the completed debrief so it survives navigation
-            save_debrief(round_id, "".join(full))
-        return Response(generate(), mimetype="text/plain")
+
+        return Response(generate(), mimetype="text/plain",
+                        headers={"X-Short-Summary": short_text[:500]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -201,10 +297,7 @@ def api_ai_performance_summary():
     try:
         provider = _build_provider()
         prompt = prompts.performance_summary(rounds)
-        def generate():
-            for chunk in provider.stream(prompt):
-                yield chunk
-        return Response(generate(), mimetype="text/plain")
+        return Response(_safe_stream(provider, prompt), mimetype="text/plain")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -217,10 +310,7 @@ def api_ai_practice_plan():
     try:
         provider = _build_provider()
         prompt = prompts.practice_plan(rounds)
-        def generate():
-            for chunk in provider.stream(prompt):
-                yield chunk
-        return Response(generate(), mimetype="text/plain")
+        return Response(_safe_stream(provider, prompt), mimetype="text/plain")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
