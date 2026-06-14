@@ -64,6 +64,36 @@ def api_import():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/import/email", methods=["POST"])
+def api_import_email():
+    """Parse a pasted Hole19 round summary email using AI and save the round."""
+    import json as _json
+    text = (request.json or {}).get("text", "").strip()
+    if not text:
+        return jsonify({"error": "No email text provided"}), 400
+    try:
+        provider = _build_provider()
+        prompt = prompts.parse_email(text)
+        raw = "".join(provider.stream(prompt))
+        # Extract JSON block from AI response
+        import re
+        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.S)
+        if not m:
+            m = re.search(r"(\{[^{}]{50,}\})", raw, re.S)
+        if not m:
+            return jsonify({"error": "AI could not extract structured data from the email", "raw": raw}), 422
+        data = _json.loads(m.group(1))
+        # Ensure required fields present
+        if not data.get("date") or not data.get("course"):
+            return jsonify({"error": "Could not extract course or date from email", "raw": raw}), 422
+        rid = insert_round(data)
+        if not rid:
+            return jsonify({"error": "Round already imported (duplicate)"}), 409
+        return jsonify({"ok": True, "id": rid, "data": data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Stats API ─────────────────────────────────────────────────────────────────
 
 @app.route("/api/stats/summary", methods=["GET"])

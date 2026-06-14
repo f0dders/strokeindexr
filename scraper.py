@@ -79,8 +79,7 @@ def _parse_scorecard(data: dict) -> dict:
         best = min(holes, key=lambda h: h["hole_score"]["total_of_strokes"] - h["hole_tee"]["par"])
         out["best_hole"] = best["sequence"]
 
-        # Store hole-by-hole JSON for future use
-        out["_holes_json"] = json.dumps(holes)
+        out["holes_json"] = json.dumps(holes)
 
     return out
 
@@ -185,8 +184,5 @@ def scrape_round(url: str) -> dict:
     dur_m = re.search(r"(\d+\s*h(?:ours?)?\s*\d*\s*m(?:in(?:utes?)?)?)", full_text, re.I)
     if dur_m:
         data.setdefault("duration", dur_m.group(1).strip())
-
-    # Remove private keys not in DB schema
-    data.pop("_holes_json", None)
 
     return data

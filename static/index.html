@@ -70,11 +70,28 @@
     <!-- ── IMPORT ── -->
     <section id="view-import" class="view">
       <h1>Import Round</h1>
-      <p class="subtitle">Paste a Hole19 round URL to import all stats automatically.</p>
-      <div class="import-box">
-        <input type="url" id="importUrl" placeholder="https://www.hole19golf.com/performance/rounds/XXXXXX" />
-        <button class="btn-primary" id="btnImport">Import</button>
+      <div class="import-tabs">
+        <button class="import-tab active" data-itab="url">Hole19 URL</button>
+        <button class="import-tab" data-itab="email">Paste Email (fallback)</button>
       </div>
+
+      <div id="itab-url" class="itab-panel">
+        <p class="subtitle">Paste a Hole19 round URL to import all stats automatically, including the per-hole scorecard.</p>
+        <div class="import-box">
+          <input type="url" id="importUrl" placeholder="https://www.hole19golf.com/performance/rounds/XXXXXX" />
+          <button class="btn-primary" id="btnImport">Import</button>
+        </div>
+      </div>
+
+      <div id="itab-email" class="itab-panel hidden">
+        <p class="subtitle">If the URL isn't available, paste the full text of your Hole19 round summary email. The AI will extract all available stats.</p>
+        <p class="subtitle" style="color:var(--gold)">⚠ Requires AI to be configured in Settings. Aggregate stats only — no per-hole scorecard.</p>
+        <textarea id="importEmailText" placeholder="Paste the full email text here…"></textarea>
+        <div style="margin-top:10px">
+          <button class="btn-primary" id="btnImportEmail">Extract &amp; Import</button>
+        </div>
+      </div>
+
       <div id="importStatus" class="import-status"></div>
     </section>
 

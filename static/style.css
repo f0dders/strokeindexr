@@ -298,10 +298,32 @@ h3 {
 .btn-regen:hover { background: var(--bg); color: var(--green); border-color: var(--green-light); }
 
 /* ── Import ── */
+.import-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0;
+}
+.import-tab {
+  padding: 10px 18px;
+  border: none;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color .15s, border-color .15s;
+}
+.import-tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+.itab-panel { max-width: 640px; }
+
 .import-box {
   display: flex;
   gap: 10px;
-  max-width: 640px;
   margin-bottom: 20px;
 }
 .import-box input {
@@ -313,16 +335,87 @@ h3 {
   font-family: inherit;
 }
 .import-box input:focus { outline: none; border-color: var(--green-light); }
+
+#importEmailText {
+  width: 100%;
+  min-height: 220px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.5;
+}
+#importEmailText:focus { outline: none; border-color: var(--green-light); }
+
 .import-status {
   font-size: 14px;
   padding: 12px 16px;
   border-radius: 8px;
-  max-width: 640px;
+  margin-top: 16px;
   display: none;
 }
 .import-status.success { background: var(--green-pale); color: var(--green); display: block; }
 .import-status.error   { background: #fdecea; color: var(--red); display: block; }
 .import-status.loading { background: #e8f4fd; color: #1a6fa8; display: block; }
+
+/* ── Scorecard ── */
+.scorecard-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+.scorecard-section h4 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.scorecard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 540px;
+}
+.scorecard-table th {
+  background: var(--green);
+  color: #fff;
+  padding: 7px 10px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+}
+.scorecard-table th:first-child { text-align: left; border-radius: 6px 0 0 0; }
+.scorecard-table th:last-child  { border-radius: 0 6px 0 0; }
+.scorecard-table td {
+  padding: 7px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--bg);
+}
+.scorecard-table td:first-child { text-align: left; font-weight: 600; color: var(--text-muted); }
+.scorecard-table tr:last-child td { border-bottom: none; font-weight: 700; background: var(--bg); }
+.scorecard-table tr:nth-child(even) td { background: #f9fbf9; }
+.scorecard-table tr:last-child td:first-child { color: var(--text); }
+
+/* Score colour badges in scorecard */
+.sc-eagle  { background: #fff3cd; color: #856404; border-radius: 50%; display:inline-block; width:24px; height:24px; line-height:24px; font-weight:700; }
+.sc-birdie { background: var(--green-pale); color: var(--green); border-radius: 50%; display:inline-block; width:24px; height:24px; line-height:24px; font-weight:700; }
+.sc-par    { color: var(--text); font-weight: 600; }
+.sc-bogey  { color: #e67e22; font-weight: 600; }
+.sc-double { color: var(--red); font-weight: 700; }
+
+.gir-hit  { color: var(--green); font-weight: 700; }
+.gir-miss { color: var(--text-muted); }
+.fir-hit  { color: var(--green); }
+.fir-miss { color: var(--red); }
+.fir-na   { color: var(--text-muted); }
 
 /* ── AI ── */
 .ai-tabs {

@@ -1,6 +1,53 @@
 """AI prompt templates for FairwayIQ golf analysis."""
 
 
+def parse_email(email_text: str) -> str:
+    return f"""You are a data extraction assistant. Extract golf round statistics from the following Hole19 round summary email and return them as a single JSON object.
+
+EMAIL TEXT:
+{email_text}
+
+Return ONLY a JSON code block with these exact keys (use null for any value not found):
+```json
+{{
+  "date": "YYYY-MM-DD",
+  "course": "Course Name",
+  "holes": 9,
+  "par": 36,
+  "score": 54,
+  "score_vs_par": 18,
+  "handicap": 18.5,
+  "putts": 17,
+  "fairway_hit_pct": 33.3,
+  "fairway_missed_pct": 50.0,
+  "fairway_other_pct": 16.7,
+  "gir_hit_pct": 11.1,
+  "gir_missed_pct": 88.9,
+  "par3_avg": 5.0,
+  "par4_avg": 6.2,
+  "par5_avg": 6.5,
+  "overall_avg": 6.0,
+  "up_and_down_pct": 25.0,
+  "scrambling_pct": 0.0,
+  "sand_saves_pct": 0.0,
+  "eagles_pct": 0.0,
+  "birdies_pct": 0.0,
+  "pars_pct": 11.1,
+  "bogeys_pct": 33.3,
+  "doubles_plus_pct": 55.6,
+  "best_hole": 8,
+  "duration": "2 hours 16 minutes",
+  "distance_miles": 3.4
+}}
+```
+
+Rules:
+- score_vs_par = score - par (positive = over par)
+- All percentage values should be numeric floats, not strings
+- date must be YYYY-MM-DD format
+- Return ONLY the JSON block, no other text"""
+
+
 def round_debrief(round_data: dict) -> str:
     r = round_data
     return f"""You are an experienced golf coach and performance analyst. Analyse this golf round and provide a concise, actionable debrief.

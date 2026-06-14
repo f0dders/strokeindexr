@@ -59,14 +59,15 @@ def init_db():
 
                 best_hole INTEGER,
                 notes TEXT,
-                ai_debrief TEXT
+                ai_debrief TEXT,
+                holes_json TEXT
             )
         """)
-        # Migrate: add ai_debrief column to existing DBs that predate it
-        try:
-            conn.execute("ALTER TABLE rounds ADD COLUMN ai_debrief TEXT")
-        except Exception:
-            pass
+        for col, typedef in [("ai_debrief", "TEXT"), ("holes_json", "TEXT")]:
+            try:
+                conn.execute(f"ALTER TABLE rounds ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass
         conn.commit()
 
 

@@ -150,6 +150,84 @@ function renderCharts(trends) {
   }
 }
 
+// ── Scorecard renderer ────────────────────────────────────────────────────────
+function renderScorecard(holesJson) {
+  if (!holesJson) return "";
+  let holes;
+  try { holes = JSON.parse(holesJson); } catch { return ""; }
+  if (!holes.length) return "";
+
+  function scoreClass(strokes, par) {
+    const d = strokes - par;
+    if (d <= -2) return "sc-eagle";
+    if (d === -1) return "sc-birdie";
+    if (d === 0)  return "sc-par";
+    if (d === 1)  return "sc-bogey";
+    return "sc-double";
+  }
+
+  function firCell(hit, par) {
+    if (par < 4) return `<span class="fir-na">—</span>`;
+    if (hit === "center" || hit === "target") return `<span class="fir-hit">✓</span>`;
+    if (hit === "left")  return `<span class="fir-miss">L</span>`;
+    if (hit === "right") return `<span class="fir-miss">R</span>`;
+    return `<span class="fir-na">—</span>`;
+  }
+
+  const totalPar     = holes.reduce((s, h) => s + h.hole_tee.par, 0);
+  const totalScore   = holes.reduce((s, h) => s + h.hole_score.total_of_strokes, 0);
+  const totalPutts   = holes.reduce((s, h) => s + (h.hole_score.total_of_putts || 0), 0);
+  const totalPenalty = holes.reduce((s, h) => s + (h.hole_score.total_of_penalties || 0), 0);
+
+  const rows = holes.map(h => {
+    const hs  = h.hole_score;
+    const ht  = h.hole_tee;
+    const cls = scoreClass(hs.total_of_strokes, ht.par);
+    const vsP = hs.total_of_strokes - ht.par;
+    const vsPLabel = vsP === 0 ? "E" : (vsP > 0 ? `+${vsP}` : `${vsP}`);
+    const girLabel = hs.green_in_regulation == null ? `<span class="fir-na">—</span>`
+      : hs.green_in_regulation ? `<span class="gir-hit">✓</span>` : `<span class="gir-miss">✗</span>`;
+    const dist = ht.distance ? Math.round(ht.distance) + "y" : "—";
+
+    return `<tr>
+      <td>Hole ${h.sequence}</td>
+      <td>${ht.par}</td>
+      <td>${ht.stroke_index ?? "—"}</td>
+      <td>${dist}</td>
+      <td><span class="${cls}">${hs.total_of_strokes}</span></td>
+      <td>${vsPLabel}</td>
+      <td>${hs.total_of_putts ?? "—"}</td>
+      <td>${girLabel}</td>
+      <td>${firCell(hs.fairway_hit, ht.par)}</td>
+      <td>${hs.total_of_penalties || 0}</td>
+    </tr>`;
+  }).join("");
+
+  const totalVsP = totalScore - totalPar;
+  const totalVsPLabel = totalVsP === 0 ? "E" : (totalVsP > 0 ? `+${totalVsP}` : `${totalVsP}`);
+
+  return `
+    <div class="scorecard-section">
+      <h4>Scorecard</h4>
+      <table class="scorecard-table">
+        <thead>
+          <tr>
+            <th>Hole</th><th>Par</th><th>SI</th><th>Dist</th>
+            <th>Score</th><th>vs Par</th><th>Putts</th><th>GIR</th><th>FIR</th><th>Pen</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+          <tr>
+            <td>Total</td><td>${totalPar}</td><td>—</td><td>—</td>
+            <td>${totalScore}</td><td>${totalVsPLabel}</td><td>${totalPutts}</td>
+            <td>—</td><td>—</td><td>${totalPenalty}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
 // ── Round History ─────────────────────────────────────────────────────────────
 async function loadRounds() {
   const rounds = await apiFetch("/api/rounds").then(r => r.json());
@@ -234,6 +312,8 @@ async function showRoundDetail(id) {
       </div>
     </div>
 
+    ${renderScorecard(r.holes_json)}
+
     <div class="notes-section">
       <h4>Round Notes</h4>
       <textarea id="notesArea" placeholder="Add your own notes about this round...">${r.notes || ""}</textarea>
@@ -290,7 +370,18 @@ async function showRoundDetail(id) {
 
 document.getElementById("btnBackToRounds").addEventListener("click", () => showView("rounds"));
 
-// ── Import ─────────────────────────────────────────────────────────────────────
+// ── Import tabs ───────────────────────────────────────────────────────────────
+document.querySelectorAll(".import-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".import-tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".itab-panel").forEach(p => p.classList.add("hidden"));
+    tab.classList.add("active");
+    document.getElementById("itab-" + tab.dataset.itab).classList.remove("hidden");
+    document.getElementById("importStatus").className = "import-status";
+  });
+});
+
+// ── Import from URL ───────────────────────────────────────────────────────────
 document.getElementById("btnImport").addEventListener("click", async () => {
   const url = document.getElementById("importUrl").value.trim();
   const status = document.getElementById("importStatus");
@@ -316,6 +407,35 @@ document.getElementById("btnImport").addEventListener("click", async () => {
     status.textContent = `✗ ${e.message}`;
   } finally {
     document.getElementById("btnImport").disabled = false;
+  }
+});
+
+// ── Import from email ─────────────────────────────────────────────────────────
+document.getElementById("btnImportEmail").addEventListener("click", async () => {
+  const text = document.getElementById("importEmailText").value.trim();
+  const status = document.getElementById("importStatus");
+  if (!text) return;
+
+  status.className = "import-status loading";
+  status.textContent = "Extracting stats from email using AI…";
+  document.getElementById("btnImportEmail").disabled = true;
+
+  try {
+    const r = await apiFetch("/api/import/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Import failed");
+    status.className = "import-status success";
+    status.textContent = `✓ Round imported: ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)}`;
+    document.getElementById("importEmailText").value = "";
+  } catch (e) {
+    status.className = "import-status error";
+    status.textContent = `✗ ${e.message}`;
+  } finally {
+    document.getElementById("btnImportEmail").disabled = false;
   }
 });
 
