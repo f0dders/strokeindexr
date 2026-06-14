@@ -806,6 +806,36 @@ h3 {
 .ratings-row { flex-wrap: wrap; }
 .tee-actions { flex-wrap: wrap; }
 
+/* ── WHS exclusion ── */
+.hcp-excluded-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--gold) 15%, transparent);
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 1px 5px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.whs-excluded-note {
+  font-size: 11px;
+  color: var(--gold);
+  margin-top: 4px;
+}
+.whs-ineligible-note {
+  font-size: 13px;
+  color: var(--gold);
+  line-height: 1.5;
+  padding: 8px;
+  background: color-mix(in srgb, var(--gold-light) 15%, transparent);
+  border-radius: 6px;
+  border: 1px solid var(--gold);
+}
+.whs-exclude-toggle { display: flex; flex-direction: column; gap: 8px; }
+.toggle-label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.toggle-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
 /* ── WHS ── */
 .stat-card-highlight { border-color: var(--green-light); background: color-mix(in srgb, var(--green-pale) 40%, var(--card-bg)); }
 .whs-row { background: color-mix(in srgb, var(--green-pale) 30%, transparent); border-radius: 5px; }
@@ -823,6 +853,37 @@ h3 {
   margin-left: 4px;
   line-height: 1.4;
 }
+
+/* ── Course suggestions & hierarchy ── */
+.course-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: color-mix(in srgb, var(--gold-light) 20%, var(--card-bg));
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+}
+.suggestion-text { font-size: 14px; line-height: 1.5; }
+.suggestion-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.course-card-child {
+  margin-left: 24px;
+  border-left: 3px solid var(--green-light);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.course-children { margin-top: 4px; display: flex; flex-direction: column; gap: 6px; }
+
+.cd-header-row { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.cd-header-row h1 { margin-bottom: 0; }
+
+.holes-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.breakdown-block { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.breakdown-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 10px; }
 
 /* ── Courses ── */
 .courses-list { display: flex; flex-direction: column; gap: 12px; }

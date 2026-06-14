@@ -93,13 +93,17 @@ function renderStatCards(s, whs) {
   const whsVal = whsCurrent?.sufficient_data
     ? whsCurrent.index + (whsCurrent.estimated ? "*" : "")
     : "—";
+  const excluded = whsCurrent?.excluded_rounds ?? [];
   const whsSub = whsCurrent?.sufficient_data
     ? (whsCurrent.estimated ? "WHS index (est.)" : "WHS index")
     : "WHS index (need 3+ rounds)";
 
+  const excNote = excluded.length
+    ? `<div class="whs-excluded-note">${excluded.length} round${excluded.length > 1 ? "s" : ""} excluded from WHS</div>`
+    : "";
   const cards = [
     { label: "Rounds Played",  value: s.total_rounds ?? "—",  sub: "total" },
-    { label: "WHS Handicap",   value: whsVal,                  sub: whsSub, highlight: whsCurrent?.sufficient_data },
+    { label: "WHS Handicap",   value: whsVal,                  sub: whsSub, highlight: whsCurrent?.sufficient_data, note: excNote },
     { label: "Avg vs Par",     value: s.avg_score_vs_par != null ? (s.avg_score_vs_par >= 0 ? "+" : "") + fmt(s.avg_score_vs_par, "", 1) : "—", sub: "per round" },
     { label: "Avg Putts",      value: fmt(s.avg_putts, "", 1), sub: "per round" },
     { label: "Avg GIR",        value: fmt(s.avg_gir, "%"),     sub: "greens in regulation" },
@@ -112,6 +116,7 @@ function renderStatCards(s, whs) {
       <div class="label">${c.label}</div>
       <div class="value">${c.value}</div>
       <div class="sub">${c.sub}</div>
+      ${c.note ?? ""}
     </div>
   `).join("");
 }
@@ -420,6 +425,7 @@ async function loadRounds() {
       <span class="round-course">${r.course || "Unknown Course"}</span>
       <span class="round-holes">${r.holes || "?"} holes</span>
       ${r.tee_colour ? `<span class="round-tee">${teeBadge(r.tee_colour)}</span>` : ""}
+      ${r.handicap_excluded || (r.holes !== 9 && r.holes !== 18) ? `<span class="hcp-excluded-badge" title="${r.holes !== 9 && r.holes !== 18 ? `Non-standard (${r.holes}H)` : "Manually excluded"}">WHS excl.</span>` : ""}
       <span class="round-score">${r.score ?? "—"}</span>
       ${scoreLabel(r.score_vs_par)}
     </div>
@@ -473,6 +479,19 @@ async function showRoundDetail(id) {
         <div class="detail-stat"><span>Playing HCP (Hole19)</span><span class="dval">${fmt(r.handicap)}</span></div>
         ${whsLabel != null ? `<div class="detail-stat whs-row"><span>WHS Index <span class="whs-badge">WHS</span></span><span class="dval whs-val">${whsLabel}</span></div>` : ""}
         <div class="detail-stat"><span>Putts</span><span class="dval">${r.putts ?? "—"}</span></div>
+      </div>
+      <div class="detail-card">
+        <h4>WHS Eligibility</h4>
+        ${r.holes !== 9 && r.holes !== 18
+          ? `<p class="whs-ineligible-note">⚠ This round has a non-standard hole count (${r.holes}H) and is automatically excluded from WHS calculations.</p>`
+          : `<div class="whs-exclude-toggle">
+               <label class="toggle-label">
+                 <input type="checkbox" id="chkHcpExclude" ${r.handicap_excluded ? "checked" : ""} />
+                 Exclude this round from WHS handicap
+               </label>
+               <p class="ratings-note">Use this for rounds played in unusual conditions, practice rounds, or any round you don't want counted.</p>
+             </div>`
+        }
       </div>
       <div class="detail-card">
         <h4>Ball Striking</h4>
@@ -535,6 +554,14 @@ async function showRoundDetail(id) {
 
   // Initialise Leaflet maps after DOM is ready
   initShotMaps(r.holes_json);
+
+  document.getElementById("chkHcpExclude")?.addEventListener("change", async (e) => {
+    await apiFetch(`/api/rounds/${r.id}/handicap-exclude`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ excluded: e.target.checked }),
+    });
+  });
 
   document.getElementById("btnSaveNotes").addEventListener("click", async () => {
     const notes = document.getElementById("notesArea").value;
@@ -834,16 +861,13 @@ document.getElementById("btnImportEmail").addEventListener("click", () => {
 });
 
 // ── Courses ───────────────────────────────────────────────────────────────────
-async function loadCourses() {
-  const el = document.getElementById("coursesList");
-  el.innerHTML = "<p>Loading…</p>";
-  const courses = await apiFetch("/api/courses").then(r => r.json());
-  if (!courses.length) {
-    el.innerHTML = "<p class='subtle'>No courses yet. Import a round to get started.</p>";
-    return;
-  }
-  el.innerHTML = courses.map(c => `
-    <div class="course-card" data-id="${c.id}">
+function courseCardHTML(c, isChild = false) {
+  const ratingBadges = TEE_COLOURS.filter(t => c[t.toLowerCase()+"_cr_18"]).map(t =>
+    `<span class="cr-badge">${teeBadge(t)} CR ${c[t.toLowerCase()+"_cr_18"]} / ${c[t.toLowerCase()+"_slope_18"] ?? "—"}</span>`
+  ).join("") || (!isChild ? `<span class="cr-missing">No ratings set</span>` : "");
+
+  return `
+    <div class="course-card${isChild ? " course-card-child" : ""}" data-id="${c.id}">
       <div class="course-card-name">${c.name}</div>
       <div class="course-card-stats">
         <span>${c.times_played} round${c.times_played !== 1 ? "s" : ""}</span>
@@ -852,48 +876,175 @@ async function loadCourses() {
         ${c.avg_putts   != null ? `<span>Avg Putts: ${c.avg_putts}</span>` : ""}
         ${c.avg_gir     != null ? `<span>GIR: ${c.avg_gir}%</span>` : ""}
         ${c.avg_fir     != null ? `<span>FIR: ${c.avg_fir}%</span>` : ""}
-        ${TEE_COLOURS.filter(t => c[t.toLowerCase()+"_cr_18"]).map(t =>
-          `<span class="cr-badge">${teeBadge(t)} CR ${c[t.toLowerCase()+"_cr_18"]} / ${c[t.toLowerCase()+"_slope_18"] ?? "—"}</span>`
-        ).join("") || `<span class="cr-missing">No ratings set</span>`}
+        ${ratingBadges}
       </div>
     </div>
-  `).join("");
+  `;
+}
+
+async function loadCourses() {
+  const el = document.getElementById("coursesList");
+  el.innerHTML = "<p>Loading…</p>";
+  const [courses, suggestions] = await Promise.all([
+    apiFetch("/api/courses").then(r => r.json()),
+    apiFetch("/api/courses/suggestions").then(r => r.json()),
+  ]);
+  if (!courses.length) {
+    el.innerHTML = "<p class='subtle'>No courses yet. Import a round to get started.</p>";
+    return;
+  }
+
+  // Suggestions banner
+  let suggestHTML = "";
+  if (suggestions.length) {
+    suggestHTML = suggestions.map(s => `
+      <div class="course-suggestion" data-ids="${s.courses.map(c=>c.id).join(",")}" data-name="${s.base_name}">
+        <div class="suggestion-text">
+          <strong>Link suggestion:</strong>
+          ${s.courses.map(c => `<em>${c.name}</em>`).join(" + ")}
+          look like halves of <strong>${s.base_name}</strong>
+        </div>
+        <div class="suggestion-actions">
+          <button class="btn-primary btn-sm btn-confirm-link">Link them</button>
+          <button class="btn-secondary btn-sm btn-dismiss-link">Dismiss</button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  el.innerHTML = suggestHTML + courses.map(c => {
+    const children = c.children || [];
+    const childHTML = children.length
+      ? `<div class="course-children">${children.map(ch => courseCardHTML(ch, true)).join("")}</div>`
+      : "";
+    return courseCardHTML(c) + childHTML;
+  }).join("");
+
   el.querySelectorAll(".course-card").forEach(card => {
     card.addEventListener("click", () => showCourseDetail(+card.dataset.id));
   });
+
+  // Suggestion confirm
+  el.querySelectorAll(".btn-confirm-link").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      const row = e.target.closest(".course-suggestion");
+      const ids = row.dataset.ids.split(",").map(Number);
+      const name = row.dataset.name;
+      await apiFetch("/api/courses/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ child_ids: ids, parent_name: name }),
+      });
+      loadCourses();
+    });
+  });
+
+  el.querySelectorAll(".btn-dismiss-link").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.target.closest(".course-suggestion").remove();
+    });
+  });
+}
+
+function roundsTableHTML(rounds) {
+  if (!rounds.length) return "<p class='subtle'>No rounds.</p>";
+  return `<div class="course-rounds-list">
+    ${rounds.map(r => `
+      <div class="course-round-row" data-id="${r.id}">
+        <span class="crr-date">${fmtDate(r.date)}</span>
+        <span class="crr-holes">${r.holes}H</span>
+        ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
+        <span class="crr-score">${r.score ?? "—"} (${r.score_vs_par != null ? (r.score_vs_par > 0 ? "+" : "") + r.score_vs_par : "—"})</span>
+        <span class="crr-putts">${r.putts ?? "—"} putts</span>
+      </div>
+    `).join("")}
+  </div>`;
+}
+
+function holeTableHTML(perHole) {
+  if (!perHole.length) return "";
+  return `
+    <div class="hole-table-wrap">
+      <table class="hole-table">
+        <thead><tr>
+          <th>Hole</th><th>Par</th><th>Avg Score</th><th>vs Par</th><th>Avg Putts</th><th>GIR %</th><th>FIR %</th><th>Rounds</th>
+        </tr></thead>
+        <tbody>
+          ${perHole.map(h => {
+            const vp = h.avg_score != null && h.par != null ? (h.avg_score - h.par).toFixed(2) : null;
+            const vpNum = vp != null ? +vp : null;
+            const cls = vpNum == null ? "" : vpNum < -0.05 ? "under-par" : vpNum > 0.05 ? "over-par" : "even-par";
+            return `<tr>
+              <td>${h.hole}</td><td>${h.par ?? "—"}</td><td>${h.avg_score ?? "—"}</td>
+              <td class="${cls}">${vp != null ? (vpNum > 0 ? "+" : "") + vp : "—"}</td>
+              <td>${h.avg_putts ?? "—"}</td>
+              <td>${h.gir_pct != null ? h.gir_pct + "%" : "—"}</td>
+              <td>${h.fir_pct != null ? h.fir_pct + "%" : "—"}</td>
+              <td>${h.rounds}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function miniStatsHTML(rounds) {
+  const scores = rounds.map(r => r.score_vs_par).filter(x => x != null);
+  const best   = scores.length ? Math.min(...scores) : null;
+  const avg    = scores.length ? (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1) : null;
+  const putts  = rounds.filter(r => r.putts).map(r => r.putts);
+  const avgP   = putts.length ? (putts.reduce((a,b) => a+b, 0) / putts.length).toFixed(1) : null;
+  return `
+    <div class="stat-mini-row">
+      <div class="stat-mini"><span class="stat-label">Rounds</span><span class="stat-val">${rounds.length}</span></div>
+      ${best != null ? `<div class="stat-mini"><span class="stat-label">Best</span><span class="stat-val">${best > 0 ? "+" : ""}${best}</span></div>` : ""}
+      ${avg  != null ? `<div class="stat-mini"><span class="stat-label">Avg Score</span><span class="stat-val">${avg > 0 ? "+" : ""}${avg}</span></div>` : ""}
+      ${avgP != null ? `<div class="stat-mini"><span class="stat-label">Avg Putts</span><span class="stat-val">${avgP}</span></div>` : ""}
+    </div>`;
 }
 
 async function showCourseDetail(id) {
-  const [c, whs] = await Promise.all([
-    apiFetch(`/api/courses/${id}`).then(r => r.json()),
-    apiFetch("/api/whs").then(r => r.json()),
-  ]);
+  const c = await apiFetch(`/api/courses/${id}`).then(r => r.json());
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   document.getElementById("view-course-detail").classList.add("active");
 
-  const el = document.getElementById("courseDetail");
-  const played = c.rounds || [];
-  const perHole = c.per_hole || [];
+  const el      = document.getElementById("courseDetail");
+  const all     = c.rounds     || [];
+  const r18     = c.rounds_18  || [];
+  const r9      = c.rounds_9   || [];
+  const perHole = c.per_hole   || [];
+  const children = c.children  || [];
+  const isParent = children.length > 0;
 
-  // Stats summary
-  const scores = played.map(r => r.score_vs_par).filter(x => x != null);
-  const best   = scores.length ? Math.min(...scores) : null;
-  const avg    = scores.length ? (scores.reduce((a,b) => a+b,0)/scores.length).toFixed(1) : null;
+  // Unlink button for children
+  const unlinkBtn = c.parent_course_id
+    ? `<button class="btn-secondary btn-sm" id="btnUnlink">Unlink from parent</button>`
+    : "";
 
   el.innerHTML = `
-    <h1>${c.name}</h1>
-    <div class="course-detail-grid">
+    <div class="cd-header-row">
+      <h1>${c.name}</h1>
+      ${unlinkBtn}
+    </div>
 
+    <div class="course-detail-grid">
       <div class="cd-section">
         <h3>Overview</h3>
-        <div class="stat-mini-row">
-          <div class="stat-mini"><span class="stat-label">Times Played</span><span class="stat-val">${played.length}</span></div>
-          ${best != null ? `<div class="stat-mini"><span class="stat-label">Best Score</span><span class="stat-val">${best > 0 ? "+" : ""}${best}</span></div>` : ""}
-          ${avg  != null ? `<div class="stat-mini"><span class="stat-label">Avg Score</span><span class="stat-val">${avg > 0 ? "+" : ""}${avg}</span></div>` : ""}
-          ${c.avg_putts != null ? `<div class="stat-mini"><span class="stat-label">Avg Putts</span><span class="stat-val">${c.avg_putts ?? "—"}</span></div>` : ""}
-          ${c.avg_gir   != null ? `<div class="stat-mini"><span class="stat-label">Avg GIR</span><span class="stat-val">${c.avg_gir}%</span></div>` : ""}
-          ${c.avg_fir   != null ? `<div class="stat-mini"><span class="stat-label">Avg FIR</span><span class="stat-val">${c.avg_fir}%</span></div>` : ""}
-        </div>
+        ${isParent ? `
+          <div class="holes-breakdown">
+            <div class="breakdown-block">
+              <div class="breakdown-label">18-Hole rounds</div>
+              ${miniStatsHTML(r18)}
+            </div>
+            <div class="breakdown-block">
+              <div class="breakdown-label">9-Hole rounds</div>
+              ${miniStatsHTML(r9)}
+            </div>
+          </div>
+          <p class="ratings-note" style="margin-top:10px">
+            ${children.map(ch => `<strong>${ch.name}</strong>: ${ch.times_played ?? 0} round${ch.times_played !== 1 ? "s" : ""}`).join(" · ")}
+          </p>
+        ` : miniStatsHTML(all)}
       </div>
 
       <div class="cd-section">
@@ -903,67 +1054,37 @@ async function showCourseDetail(id) {
             <div class="ratings-tee-group">
               <div class="ratings-tee-label">${teeBadge(tee)} ${tee} Tees</div>
               <div class="ratings-row">
-                <label>18-Hole CR<input type="number" step="0.1" data-col="${tee.toLowerCase()}_cr_18" value="${c[tee.toLowerCase()+'_cr_18'] ?? ""}" placeholder="e.g. 70.5" /></label>
-                <label>18-Hole Slope<input type="number" data-col="${tee.toLowerCase()}_slope_18" value="${c[tee.toLowerCase()+'_slope_18'] ?? ""}" placeholder="e.g. 125" /></label>
-                <label>9-Hole CR<input type="number" step="0.1" data-col="${tee.toLowerCase()}_cr_9" value="${c[tee.toLowerCase()+'_cr_9'] ?? ""}" placeholder="e.g. 35.2" /></label>
-                <label>9-Hole Slope<input type="number" data-col="${tee.toLowerCase()}_slope_9" value="${c[tee.toLowerCase()+'_slope_9'] ?? ""}" placeholder="e.g. 120" /></label>
+                <label>18H CR<input type="number" step="0.1" data-col="${tee.toLowerCase()}_cr_18" value="${c[tee.toLowerCase()+"_cr_18"] ?? ""}" placeholder="70.5" /></label>
+                <label>18H Slope<input type="number" data-col="${tee.toLowerCase()}_slope_18" value="${c[tee.toLowerCase()+"_slope_18"] ?? ""}" placeholder="125" /></label>
+                <label>9H CR<input type="number" step="0.1" data-col="${tee.toLowerCase()}_cr_9" value="${c[tee.toLowerCase()+"_cr_9"] ?? ""}" placeholder="35.2" /></label>
+                <label>9H Slope<input type="number" data-col="${tee.toLowerCase()}_slope_9" value="${c[tee.toLowerCase()+"_slope_9"] ?? ""}" placeholder="120" /></label>
               </div>
             </div>
           `).join("")}
           <label class="ratings-notes">Notes<textarea id="courseNotes" rows="2">${c.notes ?? ""}</textarea></label>
-          <button type="submit" class="btn-primary" id="btnSaveRatings">Save Ratings</button>
-          <span id="ratingsSaved" class="ratings-saved hidden">Saved ✓</span>
+          <div style="display:flex;align-items:center;gap:12px">
+            <button type="submit" class="btn-primary" id="btnSaveRatings">Save Ratings</button>
+            <span id="ratingsSaved" class="ratings-saved hidden">Saved ✓</span>
+          </div>
         </form>
-        <p class="ratings-note">CR and Slope are per tee colour. Used for WHS handicap — set at least the Yellow tees for accurate differentials.</p>
+        <p class="ratings-note">${isParent
+          ? "Set 18H ratings here. 9H ratings can also be set here to apply to both halves, or individually on each half's page."
+          : "CR and Slope per tee. Used for WHS — set Yellow tees first for accurate differentials."
+        }</p>
       </div>
-
     </div>
 
-    ${perHole.length ? `
-    <div class="cd-section">
-      <h3>Per-Hole Averages</h3>
-      <div class="hole-table-wrap">
-        <table class="hole-table">
-          <thead><tr>
-            <th>Hole</th><th>Par</th><th>Avg Score</th><th>vs Par</th><th>Avg Putts</th><th>GIR %</th><th>FIR %</th><th>Rounds</th>
-          </tr></thead>
-          <tbody>
-            ${perHole.map(h => {
-              const vp = h.avg_score != null && h.par != null ? (h.avg_score - h.par).toFixed(2) : null;
-              const vpNum = vp != null ? +vp : null;
-              const cls = vpNum == null ? "" : vpNum < -0.05 ? "under-par" : vpNum > 0.05 ? "over-par" : "even-par";
-              return `<tr>
-                <td>${h.hole}</td>
-                <td>${h.par ?? "—"}</td>
-                <td>${h.avg_score ?? "—"}</td>
-                <td class="${cls}">${vp != null ? (vpNum > 0 ? "+" : "") + vp : "—"}</td>
-                <td>${h.avg_putts ?? "—"}</td>
-                <td>${h.gir_pct != null ? h.gir_pct + "%" : "—"}</td>
-                <td>${h.fir_pct != null ? h.fir_pct + "%" : "—"}</td>
-                <td>${h.rounds}</td>
-              </tr>`;
-            }).join("")}
-          </tbody>
-        </table>
-      </div>
-    </div>` : ""}
+    ${perHole.length ? `<div class="cd-section"><h3>Per-Hole Averages</h3>${holeTableHTML(perHole)}</div>` : ""}
 
     <div class="cd-section">
-      <h3>Rounds at This Course</h3>
-      <div class="course-rounds-list">
-        ${played.length ? played.map(r => `
-          <div class="course-round-row" data-id="${r.id}">
-            <span class="crr-date">${fmtDate(r.date)}</span>
-            <span class="crr-holes">${r.holes}H</span>
-            <span class="crr-score">${r.score ?? "—"} (${r.score_vs_par != null ? (r.score_vs_par > 0 ? "+" : "") + r.score_vs_par : "—"})</span>
-            <span class="crr-putts">${r.putts ?? "—"} putts</span>
-          </div>
-        `).join("") : "<p class='subtle'>No rounds yet.</p>"}
-      </div>
+      <h3>All Rounds</h3>
+      ${isParent ? `
+        ${r18.length ? `<div class="breakdown-label" style="margin-bottom:8px">18-Hole</div>${roundsTableHTML(r18)}` : ""}
+        ${r9.length  ? `<div class="breakdown-label" style="margin:16px 0 8px">9-Hole</div>${roundsTableHTML(r9)}` : ""}
+      ` : roundsTableHTML(all)}
     </div>
   `;
 
-  // Ratings form
   document.getElementById("courseRatingsForm").addEventListener("submit", async e => {
     e.preventDefault();
     const body = { notes: document.getElementById("courseNotes").value || null };
@@ -972,14 +1093,17 @@ async function showCourseDetail(id) {
       body[inp.dataset.col] = v ? (inp.dataset.col.includes("slope") ? parseInt(v) : parseFloat(v)) : null;
     });
     await apiFetch(`/api/courses/${id}`, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
-    const saved = document.getElementById("ratingsSaved");
-    saved.classList.remove("hidden");
-    setTimeout(() => saved.classList.add("hidden"), 2000);
+    document.getElementById("ratingsSaved").classList.remove("hidden");
+    setTimeout(() => document.getElementById("ratingsSaved").classList.add("hidden"), 2000);
   });
 
-  // Click round rows
   el.querySelectorAll(".course-round-row").forEach(row => {
     row.addEventListener("click", () => showRoundDetail(+row.dataset.id));
+  });
+
+  document.getElementById("btnUnlink")?.addEventListener("click", async () => {
+    await apiFetch(`/api/courses/${id}/unlink`, { method: "POST" });
+    showView("courses");
   });
 }
 

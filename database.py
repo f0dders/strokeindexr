@@ -1,6 +1,7 @@
 """SQLite database layer for FairwayIQ."""
 
 import json
+import re
 import sqlite3
 import os
 
@@ -69,6 +70,7 @@ def init_db():
             ("playing_hcp", "REAL"),
             ("ai_short_summary", "TEXT"),
             ("tee_colour", "TEXT"),
+            ("handicap_excluded", "INTEGER DEFAULT 0"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE rounds ADD COLUMN {col} {typedef}")
@@ -108,6 +110,11 @@ def init_db():
                         conn.execute(f"ALTER TABLE courses ADD COLUMN {col} {typedef}")
                     except Exception:
                         pass
+        # Parent course link (for grouping front/back 9 halves)
+        try:
+            conn.execute("ALTER TABLE courses ADD COLUMN parent_course_id INTEGER REFERENCES courses(id)")
+        except Exception:
+            pass
         # Seed courses from any already-imported rounds
         _sync_courses(conn)
         conn.commit()
@@ -184,29 +191,158 @@ def get_rounds_for_course(course_name: str) -> list[dict]:
 
 
 def get_all_rounds_with_course_ratings() -> list[dict]:
-    """Return all rounds joined with tee-specific CR/Slope for WHS calculation."""
+    """
+    Return all rounds joined with tee-specific CR/Slope for WHS calculation.
+    For 9-hole rounds, falls back to the parent course's 9H rating when the
+    child course (Front/Back 9) doesn't have its own rating set.
+    """
+    def _cr_expr(holes_cond):
+        def col(tee, h, table="c"):
+            return f"{table}.{tee}_{h}"
+        def coalesce_tee(tee, h_child, h_parent):
+            return f"COALESCE({col(tee+'_cr', h_child)}, {col(tee+'_cr', h_parent, 'p')})"
+        return f"""CASE LOWER(r.tee_colour)
+                    WHEN 'white'  THEN {coalesce_tee('white',  h_child, h_child)}
+                    WHEN 'yellow' THEN {coalesce_tee('yellow', h_child, h_child)}
+                    WHEN 'red'    THEN {coalesce_tee('red',    h_child, h_child)}
+                    WHEN 'blue'   THEN {coalesce_tee('blue',   h_child, h_child)}
+                    ELSE               {coalesce_tee('yellow', h_child, h_child)}
+                END"""
+
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT r.*,
                 CASE LOWER(r.tee_colour)
-                    WHEN 'white'  THEN CASE WHEN r.holes <= 9 THEN c.white_cr_9  ELSE c.white_cr_18  END
-                    WHEN 'yellow' THEN CASE WHEN r.holes <= 9 THEN c.yellow_cr_9 ELSE c.yellow_cr_18 END
-                    WHEN 'red'    THEN CASE WHEN r.holes <= 9 THEN c.red_cr_9    ELSE c.red_cr_18    END
-                    WHEN 'blue'   THEN CASE WHEN r.holes <= 9 THEN c.blue_cr_9   ELSE c.blue_cr_18   END
-                    ELSE               CASE WHEN r.holes <= 9 THEN c.yellow_cr_9 ELSE c.yellow_cr_18 END
+                    WHEN 'white'  THEN COALESCE(CASE WHEN r.holes<=9 THEN c.white_cr_9  ELSE c.white_cr_18  END, CASE WHEN r.holes<=9 THEN p.white_cr_9  ELSE p.white_cr_18  END)
+                    WHEN 'yellow' THEN COALESCE(CASE WHEN r.holes<=9 THEN c.yellow_cr_9 ELSE c.yellow_cr_18 END, CASE WHEN r.holes<=9 THEN p.yellow_cr_9 ELSE p.yellow_cr_18 END)
+                    WHEN 'red'    THEN COALESCE(CASE WHEN r.holes<=9 THEN c.red_cr_9    ELSE c.red_cr_18    END, CASE WHEN r.holes<=9 THEN p.red_cr_9    ELSE p.red_cr_18    END)
+                    WHEN 'blue'   THEN COALESCE(CASE WHEN r.holes<=9 THEN c.blue_cr_9   ELSE c.blue_cr_18   END, CASE WHEN r.holes<=9 THEN p.blue_cr_9   ELSE p.blue_cr_18   END)
+                    ELSE               COALESCE(CASE WHEN r.holes<=9 THEN c.yellow_cr_9 ELSE c.yellow_cr_18 END, CASE WHEN r.holes<=9 THEN p.yellow_cr_9 ELSE p.yellow_cr_18 END)
                 END AS _course_rating,
                 CASE LOWER(r.tee_colour)
-                    WHEN 'white'  THEN CASE WHEN r.holes <= 9 THEN c.white_slope_9  ELSE c.white_slope_18  END
-                    WHEN 'yellow' THEN CASE WHEN r.holes <= 9 THEN c.yellow_slope_9 ELSE c.yellow_slope_18 END
-                    WHEN 'red'    THEN CASE WHEN r.holes <= 9 THEN c.red_slope_9    ELSE c.red_slope_18    END
-                    WHEN 'blue'   THEN CASE WHEN r.holes <= 9 THEN c.blue_slope_9   ELSE c.blue_slope_18   END
-                    ELSE               CASE WHEN r.holes <= 9 THEN c.yellow_slope_9 ELSE c.yellow_slope_18 END
+                    WHEN 'white'  THEN COALESCE(CASE WHEN r.holes<=9 THEN c.white_slope_9  ELSE c.white_slope_18  END, CASE WHEN r.holes<=9 THEN p.white_slope_9  ELSE p.white_slope_18  END)
+                    WHEN 'yellow' THEN COALESCE(CASE WHEN r.holes<=9 THEN c.yellow_slope_9 ELSE c.yellow_slope_18 END, CASE WHEN r.holes<=9 THEN p.yellow_slope_9 ELSE p.yellow_slope_18 END)
+                    WHEN 'red'    THEN COALESCE(CASE WHEN r.holes<=9 THEN c.red_slope_9    ELSE c.red_slope_18    END, CASE WHEN r.holes<=9 THEN p.red_slope_9    ELSE p.red_slope_18    END)
+                    WHEN 'blue'   THEN COALESCE(CASE WHEN r.holes<=9 THEN c.blue_slope_9   ELSE c.blue_slope_18   END, CASE WHEN r.holes<=9 THEN p.blue_slope_9   ELSE p.blue_slope_18   END)
+                    ELSE               COALESCE(CASE WHEN r.holes<=9 THEN c.yellow_slope_9 ELSE c.yellow_slope_18 END, CASE WHEN r.holes<=9 THEN p.yellow_slope_9 ELSE p.yellow_slope_18 END)
                 END AS _slope_rating
             FROM rounds r
             LEFT JOIN courses c ON c.name = r.course
+            LEFT JOIN courses p ON p.id = c.parent_course_id
             ORDER BY r.date ASC
         """).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── Course name / linking helpers ─────────────────────────────────────────────
+
+_HALF_SUFFIX = re.compile(
+    r'\s*[\(\-]\s*(Front|Back)\s*(9|Nine|9\s*Holes?)?\s*\)?$',
+    re.IGNORECASE,
+)
+
+def course_base_name(name: str) -> str:
+    """Strip front/back 9 suffixes to get the parent course base name."""
+    return _HALF_SUFFIX.sub("", name).strip()
+
+
+def get_suggested_links() -> list[dict]:
+    """
+    Return groups of unlinked courses that look like halves of the same course.
+    Each group: {base_name, courses: [...]}.
+    """
+    from collections import defaultdict
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM courses WHERE parent_course_id IS NULL"
+        ).fetchall()
+    groups = defaultdict(list)
+    for row in rows:
+        d = dict(row)
+        base = course_base_name(d["name"])
+        if base != d["name"]:          # has a recognisable half-suffix
+            groups[base].append(d)
+    return [
+        {"base_name": base, "courses": cs}
+        for base, cs in groups.items()
+        if len(cs) >= 2
+    ]
+
+
+def link_courses(child_ids: list[int], parent_name: str) -> int:
+    """
+    Create (or find) a parent course with parent_name and link child_ids to it.
+    Returns the parent course id.
+    """
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM courses WHERE name = ?", (parent_name,)
+        ).fetchone()
+        if row:
+            parent_id = row["id"]
+        else:
+            cur = conn.execute(
+                "INSERT INTO courses (name) VALUES (?)", (parent_name,)
+            )
+            parent_id = cur.lastrowid
+        for cid in child_ids:
+            conn.execute(
+                "UPDATE courses SET parent_course_id = ? WHERE id = ?",
+                (parent_id, cid),
+            )
+        conn.commit()
+    return parent_id
+
+
+def unlink_course(child_id: int):
+    """Remove a course's parent link."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE courses SET parent_course_id = NULL WHERE id = ?", (child_id,)
+        )
+        conn.commit()
+
+
+def get_courses_with_hierarchy() -> list[dict]:
+    """
+    Return courses for the list view:
+    - Parent courses (or parents with no parent themselves) with children embedded
+    - Standalone courses (no parent, no half-suffix) returned as-is
+    Children are not returned as top-level entries.
+    """
+    with get_conn() as conn:
+        all_courses = [dict(r) for r in conn.execute("SELECT * FROM courses ORDER BY name").fetchall()]
+
+    by_id = {c["id"]: c for c in all_courses}
+    parents = {}   # id -> course dict with children list
+    standalone = []
+
+    for c in all_courses:
+        pid = c.get("parent_course_id")
+        if pid:
+            if pid not in parents:
+                parent = by_id.get(pid, {"id": pid, "name": "Unknown"})
+                parents[pid] = {**parent, "children": []}
+            parents[pid]["children"].append(c)
+        elif c["id"] not in parents:
+            standalone.append(c)
+
+    # Merge parents into standalone list (parent may already be in standalone)
+    result = []
+    seen = set()
+    for c in standalone:
+        cid = c["id"]
+        if cid in parents:
+            result.append({**parents[cid]})
+        else:
+            result.append({**c, "children": []})
+        seen.add(cid)
+    # Any parent that wasn't in standalone (shouldn't happen, but be safe)
+    for pid, p in parents.items():
+        if pid not in seen:
+            result.append(p)
+
+    return sorted(result, key=lambda c: c["name"])
 
 
 def find_duplicate(data: dict) -> dict | None:
@@ -274,6 +410,15 @@ def delete_round(round_id: int):
 def update_notes(round_id: int, notes: str):
     with get_conn() as conn:
         conn.execute("UPDATE rounds SET notes = ? WHERE id = ?", (notes, round_id))
+        conn.commit()
+
+
+def set_handicap_excluded(round_id: int, excluded: bool):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE rounds SET handicap_excluded = ? WHERE id = ?",
+            (1 if excluded else 0, round_id),
+        )
         conn.commit()
 
 

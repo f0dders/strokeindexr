@@ -22,9 +22,16 @@ def _parse_scorecard(data: dict) -> dict:
     """Extract fields from the MyScorecard React component JSON."""
     out = {}
     out["course"] = data.get("course_name")
-    out["par"] = data.get("course_par")
-    out["holes"] = data.get("holes_number")
     out["playing_hcp"] = data.get("playing_hcp")
+
+    # Use actual scorecard hole count — holes_number from Hole19 metadata can
+    # report 18 even when only 9 holes were tracked (e.g. a 9-hole course).
+    holes_list = data.get("holes", [])
+    actual_holes = len(holes_list)
+    out["holes"] = actual_holes if actual_holes else data.get("holes_number")
+    # Recalculate par from scorecard too, as course_par can reflect the full
+    # course even when only half was played.
+    out["par"] = sum(h["hole_tee"]["par"] for h in holes_list) if holes_list else data.get("course_par")
 
     played = data.get("played_date", "")
     if played:

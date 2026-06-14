@@ -4,12 +4,14 @@ from flask import Flask, request, jsonify, Response, send_from_directory
 from database import (
     init_db, insert_round, replace_round, find_duplicate,
     get_rounds, get_round, delete_round,
-    update_notes, save_debrief, save_short_summary,
+    update_notes, save_debrief, save_short_summary, set_handicap_excluded,
     get_global_summary, save_global_summary,
     get_stats_summary, get_trend_data,
     get_courses, get_course, update_course_ratings,
     get_rounds_for_course, get_all_rounds_with_course_ratings,
     sync_courses, TEE_COLOURS,
+    get_courses_with_hierarchy, get_suggested_links,
+    link_courses, unlink_course,
     load_config, save_config,
 )
 from whs import current_index, index_history
@@ -133,15 +135,41 @@ def api_import_email():
 
 # ── Courses API ──────────────────────────────────────────────────────────────
 
+@app.route("/api/courses/suggestions", methods=["GET"])
+def api_course_suggestions():
+    return jsonify(get_suggested_links())
+
+
+@app.route("/api/courses/link", methods=["POST"])
+def api_link_courses():
+    body = request.json or {}
+    child_ids  = body.get("child_ids", [])
+    parent_name = body.get("parent_name", "")
+    if not child_ids or not parent_name:
+        return jsonify({"error": "child_ids and parent_name required"}), 400
+    parent_id = link_courses(child_ids, parent_name)
+    return jsonify({"ok": True, "parent_id": parent_id})
+
+
+@app.route("/api/courses/<int:course_id>/unlink", methods=["POST"])
+def api_unlink_course(course_id):
+    unlink_course(course_id)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/courses", methods=["GET"])
 def api_get_courses():
-    courses = get_courses()
+    courses = get_courses_with_hierarchy()
     # Annotate each with aggregate stats from rounds
     import json as _json
-    for c in courses:
+
+    def annotate(c):
         rounds = get_rounds_for_course(c["name"])
-        c["times_played"]  = len(rounds)
+        # Include children's rounds in parent stats
+        for child in c.get("children", []):
+            rounds += get_rounds_for_course(child["name"])
         scores_vs_par = [r["score_vs_par"] for r in rounds if r.get("score_vs_par") is not None]
+        c["times_played"]  = len(rounds)
         c["best_vs_par"]   = min(scores_vs_par) if scores_vs_par else None
         c["avg_vs_par"]    = round(sum(scores_vs_par) / len(scores_vs_par), 1) if scores_vs_par else None
         putts = [r["putts"] for r in rounds if r.get("putts")]
@@ -150,15 +178,43 @@ def api_get_courses():
         c["avg_gir"]       = round(sum(gir) / len(gir), 1) if gir else None
         fir = [r["fairway_hit_pct"] for r in rounds if r.get("fairway_hit_pct") is not None]
         c["avg_fir"]       = round(sum(fir) / len(fir), 1) if fir else None
+        return c
+
+    for c in courses:
+        annotate(c)
+        for child in c.get("children", []):
+            annotate(child)
     return jsonify(courses)
 
 
 @app.route("/api/courses/<int:course_id>", methods=["GET"])
 def api_get_course(course_id):
+    from database import get_courses_with_hierarchy
     c = get_course(course_id)
     if not c:
         return jsonify({"error": "Not found"}), 404
-    rounds = get_rounds_for_course(c["name"])
+
+    # Attach children if this is a parent course
+    all_courses = get_courses_with_hierarchy()
+    for entry in all_courses:
+        if entry["id"] == course_id:
+            c["children"] = entry.get("children", [])
+            break
+    else:
+        c["children"] = []
+
+    # Gather rounds: own rounds + all children's rounds
+    own_rounds = get_rounds_for_course(c["name"])
+    child_rounds = []
+    for child in c["children"]:
+        child["rounds"] = get_rounds_for_course(child["name"])
+        child_rounds += child["rounds"]
+    all_rounds = own_rounds + child_rounds
+
+    # Split by hole count for the breakdown
+    rounds_18 = [r for r in all_rounds if (r.get("holes") or 0) > 9]
+    rounds_9  = [r for r in all_rounds if (r.get("holes") or 0) <= 9]
+    rounds = all_rounds
 
     # Per-hole averages across all rounds that have holes_json
     import json as _json
@@ -208,7 +264,13 @@ def api_get_course(course_id):
             "rounds":    n,
         })
 
-    return jsonify({**c, "rounds": rounds, "per_hole": per_hole})
+    return jsonify({
+        **c,
+        "rounds":    rounds,
+        "rounds_18": rounds_18,
+        "rounds_9":  rounds_9,
+        "per_hole":  per_hole,
+    })
 
 
 @app.route("/api/courses/<int:course_id>", methods=["PUT"])
@@ -216,6 +278,13 @@ def api_update_course(course_id):
     body  = request.json or {}
     notes = body.pop("notes", None)
     update_course_ratings(course_id, ratings=body, notes=notes)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/rounds/<int:round_id>/handicap-exclude", methods=["POST"])
+def api_handicap_exclude(round_id):
+    excluded = (request.json or {}).get("excluded", False)
+    set_handicap_excluded(round_id, excluded)
     return jsonify({"ok": True})
 
 

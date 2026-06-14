@@ -50,14 +50,31 @@ def _round_differential(r: dict) -> tuple[float, bool]:
         return float(score - par), True  # fallback: CR=par, Slope=113
 
 
+VALID_HOLES = {9, 18}
+
+
+def _exclusion_reason(r: dict) -> str | None:
+    """Return a human-readable reason if a round must be excluded, else None."""
+    if r.get("handicap_excluded"):
+        return "Manually excluded"
+    holes = r.get("holes") or 0
+    if holes not in VALID_HOLES:
+        return f"Non-standard hole count ({holes}H — only 9H and 18H are WHS-eligible)"
+    return None
+
+
 def build_differentials(rounds: list[dict]) -> list[dict]:
     """
     Process a chronologically sorted list of round dicts into 18-hole equivalent
     differentials per WHS §5.2.
 
+    Rounds are excluded when:
+      - handicap_excluded is truthy (manually excluded by user)
+      - holes is not exactly 9 or 18 (non-standard / partial rounds)
+
     9-hole rounds are held until a second 9-hole round arrives; their differentials
     are summed to form one 18-hole equivalent. An unpaired 9-hole round at the end
-    remains 'pending' and is excluded from the handicap calculation.
+    remains 'pending' and is excluded per WHS rules.
 
     Returns a list of dicts:
         date          – date of the later round (for the pair) or the round itself
@@ -67,15 +84,17 @@ def build_differentials(rounds: list[dict]) -> list[dict]:
     """
     sorted_rounds = sorted(rounds, key=lambda r: (r.get("date") or ""))
     results   = []
-    pending_9 = None  # dict: {sd, date, estimated}
+    pending_9 = None
 
     for r in sorted_rounds:
-        holes = r.get("holes") or 18
+        if _exclusion_reason(r):
+            continue
+        holes = r.get("holes")
         sd, estimated = _round_differential(r)
         if sd is None:
             continue
 
-        if holes <= 9:
+        if holes == 9:
             if pending_9 is None:
                 pending_9 = {"sd": sd, "date": r.get("date"), "estimated": estimated}
             else:
@@ -86,15 +105,13 @@ def build_differentials(rounds: list[dict]) -> list[dict]:
                     "paired":       True,
                 })
                 pending_9 = None
-        else:
+        else:  # holes == 18
             results.append({
                 "date":         r.get("date"),
                 "differential": sd,
                 "estimated":    estimated,
                 "paired":       False,
             })
-
-    # pending_9 (unpaired) is intentionally excluded per WHS rules
 
     return results
 
@@ -125,25 +142,35 @@ def current_index(rounds: list[dict]) -> dict:
     Returns:
         index              – float or None (None = insufficient data)
         differential_count – number of 18-hole equivalent differentials available
-        pending_nine       – True if there is one unpaired 9-hole score
+        pending_nine       – True if there is one unpaired eligible 9-hole score
         estimated          – True if any differential in the last 20 used the fallback
         sufficient_data    – True if index could be calculated
+        excluded_rounds    – list of {id, date, course, holes, reason} for excluded rounds
     """
     sorted_rounds = sorted(rounds, key=lambda r: (r.get("date") or ""))
 
-    # Check for pending 9-hole
-    pending_9 = False
-    nine_count = 0
+    excluded = []
+    eligible = []
     for r in sorted_rounds:
-        if (r.get("holes") or 18) <= 9:
-            nine_count += 1
-    if nine_count % 2 == 1:
-        pending_9 = True
+        reason = _exclusion_reason(r)
+        if reason:
+            excluded.append({
+                "id":     r.get("id"),
+                "date":   r.get("date"),
+                "course": r.get("course"),
+                "holes":  r.get("holes"),
+                "reason": reason,
+            })
+        else:
+            eligible.append(r)
 
-    diff_info  = build_differentials(sorted_rounds)
-    diffs      = [d["differential"] for d in diff_info]
-    idx        = index_from_differentials(diffs)
-    any_est    = any(d["estimated"] for d in diff_info[-MAX_ROUNDS:]) if diff_info else False
+    nine_count = sum(1 for r in eligible if r.get("holes") == 9)
+    pending_9  = nine_count % 2 == 1
+
+    diff_info = build_differentials(sorted_rounds)  # exclusion applied inside
+    diffs     = [d["differential"] for d in diff_info]
+    idx       = index_from_differentials(diffs)
+    any_est   = any(d["estimated"] for d in diff_info[-MAX_ROUNDS:]) if diff_info else False
 
     return {
         "index":              idx,
@@ -151,6 +178,7 @@ def current_index(rounds: list[dict]) -> dict:
         "pending_nine":       pending_9,
         "estimated":          any_est,
         "sufficient_data":    idx is not None,
+        "excluded_rounds":    excluded,
     }
 
 
