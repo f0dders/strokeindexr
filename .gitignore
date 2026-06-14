@@ -1,12 +1,31 @@
+# Python
 venv/
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+
+# User data — never commit
 data/
+*.db
+*.sqlite
+*.sqlite3
+
+# AI config (contains API keys)
+data/config.json
+
+# macOS
 .DS_Store
+.AppleDouble
 
 # Dev-only files
 dev.py
 Start - Dev (Mac).command
 Start - Dev (Windows).bat
 Start - Dev (Linux).sh
+
+# Editor / tooling
+.claude/
+.vscode/
+.idea/
+*.log
