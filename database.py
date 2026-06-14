@@ -68,11 +68,14 @@ def init_db():
             ("holes_json", "TEXT"),
             ("playing_hcp", "REAL"),
             ("ai_short_summary", "TEXT"),
+            ("tee_colour", "TEXT"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE rounds ADD COLUMN {col} {typedef}")
             except Exception:
                 pass
+        # Backfill existing rounds with no tee_colour as Yellow
+        conn.execute("UPDATE rounds SET tee_colour = 'Yellow' WHERE tee_colour IS NULL")
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS global_summaries (
@@ -82,7 +85,128 @@ def init_db():
                 generated_at TEXT
             )
         """)
+        for col, typedef in [("round_count", "INTEGER")]:
+            try:
+                conn.execute(f"ALTER TABLE global_summaries ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS courses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Per-tee CR/Slope columns (White/Yellow/Red/Blue × 18H/9H)
+        for tee in ("white", "yellow", "red", "blue"):
+            for holes in ("18", "9"):
+                for stat, typedef in (("cr", "REAL"), ("slope", "INTEGER")):
+                    col = f"{tee}_{stat}_{holes}"
+                    try:
+                        conn.execute(f"ALTER TABLE courses ADD COLUMN {col} {typedef}")
+                    except Exception:
+                        pass
+        # Seed courses from any already-imported rounds
+        _sync_courses(conn)
         conn.commit()
+
+
+def _sync_courses(conn):
+    """Ensure every unique course name in rounds has a courses row."""
+    rows = conn.execute(
+        "SELECT DISTINCT course FROM rounds WHERE course IS NOT NULL"
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "INSERT OR IGNORE INTO courses (name) VALUES (?)", (row["course"],)
+        )
+
+
+def sync_courses():
+    """Public entry — call after inserting/replacing a round."""
+    with get_conn() as conn:
+        _sync_courses(conn)
+        conn.commit()
+
+
+def get_courses() -> list[dict]:
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM courses ORDER BY name"
+        ).fetchall()]
+
+
+def get_course(course_id: int) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_course_by_name(name: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM courses WHERE name = ?", (name,)).fetchone()
+        return dict(row) if row else None
+
+
+TEE_COLOURS = ("White", "Yellow", "Red", "Blue")
+
+def update_course_ratings(course_id: int, ratings: dict, notes: str | None):
+    """
+    ratings: dict keyed by e.g. 'yellow_cr_18', 'yellow_slope_18', etc.
+    Accepts any subset; unknown keys are ignored.
+    """
+    valid_cols = {
+        f"{t.lower()}_{s}_{h}"
+        for t in TEE_COLOURS for h in ("18", "9") for s in ("cr", "slope")
+    }
+    sets, vals = [], []
+    for k, v in ratings.items():
+        if k in valid_cols:
+            sets.append(f"{k} = ?")
+            vals.append(v if v not in ("", None) else None)
+    sets.append("notes = ?")
+    vals.append(notes)
+    vals.append(course_id)
+    with get_conn() as conn:
+        conn.execute(f"UPDATE courses SET {', '.join(sets)} WHERE id = ?", vals)
+        conn.commit()
+
+
+def get_rounds_for_course(course_name: str) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM rounds WHERE course = ? ORDER BY date DESC",
+            (course_name,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_all_rounds_with_course_ratings() -> list[dict]:
+    """Return all rounds joined with tee-specific CR/Slope for WHS calculation."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT r.*,
+                CASE LOWER(r.tee_colour)
+                    WHEN 'white'  THEN CASE WHEN r.holes <= 9 THEN c.white_cr_9  ELSE c.white_cr_18  END
+                    WHEN 'yellow' THEN CASE WHEN r.holes <= 9 THEN c.yellow_cr_9 ELSE c.yellow_cr_18 END
+                    WHEN 'red'    THEN CASE WHEN r.holes <= 9 THEN c.red_cr_9    ELSE c.red_cr_18    END
+                    WHEN 'blue'   THEN CASE WHEN r.holes <= 9 THEN c.blue_cr_9   ELSE c.blue_cr_18   END
+                    ELSE               CASE WHEN r.holes <= 9 THEN c.yellow_cr_9 ELSE c.yellow_cr_18 END
+                END AS _course_rating,
+                CASE LOWER(r.tee_colour)
+                    WHEN 'white'  THEN CASE WHEN r.holes <= 9 THEN c.white_slope_9  ELSE c.white_slope_18  END
+                    WHEN 'yellow' THEN CASE WHEN r.holes <= 9 THEN c.yellow_slope_9 ELSE c.yellow_slope_18 END
+                    WHEN 'red'    THEN CASE WHEN r.holes <= 9 THEN c.red_slope_9    ELSE c.red_slope_18    END
+                    WHEN 'blue'   THEN CASE WHEN r.holes <= 9 THEN c.blue_slope_9   ELSE c.blue_slope_18   END
+                    ELSE               CASE WHEN r.holes <= 9 THEN c.yellow_slope_9 ELSE c.yellow_slope_18 END
+                END AS _slope_rating
+            FROM rounds r
+            LEFT JOIN courses c ON c.name = r.course
+            ORDER BY r.date ASC
+        """).fetchall()
+        return [dict(r) for r in rows]
 
 
 def find_duplicate(data: dict) -> dict | None:
@@ -167,16 +291,21 @@ def get_global_summary(summary_type: str = "performance") -> dict | None:
         return dict(row) if row else None
 
 
-def save_global_summary(summary_type: str, short_summary: str, full_report: str):
+def save_global_summary(summary_type: str, short_summary: str, full_report: str, round_count: int = 0):
     with get_conn() as conn:
+        try:
+            conn.execute("ALTER TABLE global_summaries ADD COLUMN round_count INTEGER DEFAULT 0")
+        except Exception:
+            pass
         conn.execute("""
-            INSERT INTO global_summaries (type, short_summary, full_report, generated_at)
-            VALUES (?, ?, ?, datetime('now'))
+            INSERT INTO global_summaries (type, short_summary, full_report, generated_at, round_count)
+            VALUES (?, ?, ?, datetime('now'), ?)
             ON CONFLICT(type) DO UPDATE SET
                 short_summary = excluded.short_summary,
                 full_report   = excluded.full_report,
-                generated_at  = excluded.generated_at
-        """, (summary_type, short_summary, full_report))
+                generated_at  = excluded.generated_at,
+                round_count   = excluded.round_count
+        """, (summary_type, short_summary, full_report, round_count))
         conn.commit()
 
 
