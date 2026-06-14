@@ -344,10 +344,21 @@ h3 {
 }
 .notes-section textarea:focus { outline: none; border-color: var(--green-light); }
 
-.detail-actions {
+.round-action-bar {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  margin-bottom: 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.round-action-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .ai-debrief-box {
@@ -818,18 +829,7 @@ h3 {
   color: var(--text-muted);
   margin-right: 14px;
 }
-.btn-toggle-report {
-  font-size: 12px;
-  font-weight: 500;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 4px 10px;
-  color: var(--text-muted);
-  cursor: pointer;
-  margin-top: 6px;
-}
-.btn-toggle-report:hover { border-color: var(--green-light); color: var(--green); }
+/* btn-toggle-report replaced by btn-secondary in round action bar */
 .gs-full-report {
   margin-top: 18px;
   padding-top: 18px;
@@ -920,23 +920,7 @@ h3 {
 }
 
 /* ── PDF export ── */
-.report-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
-}
-.btn-export {
-  font-size: 12px;
-  font-weight: 500;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 4px 11px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.btn-export:hover { border-color: var(--green-light); color: var(--green); }
+/* report-toolbar and btn-export replaced by round-action-bar */
 .ai-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 
 /* ── Duplicate round prompt ── */

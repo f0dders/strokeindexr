@@ -271,17 +271,17 @@ function renderCharts(trends, whs, summary = {}) {
               summary.avg_bogeys_pct       ?? 0,
               summary.avg_doubles_plus_pct ?? 0,
             ],
-            backgroundColor: "rgba(100,116,139,0.18)",
-            borderColor:     "rgba(100,116,139,0.5)",
+            backgroundColor: "rgba(100,116,139,0.2)",
+            borderColor:     "rgba(100,116,139,0.45)",
             borderWidth: 2,
             borderRadius: 6,
-            borderDash: [4, 3],
             order: 2,
           }
         ]
       },
       options: {
         responsive: true,
+
         plugins: {
           legend: { display: true, position: "top", labels: { boxWidth: 12, font: { size: 12 } } },
           tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
@@ -593,20 +593,20 @@ async function showRoundDetail(id) {
       </div>
     </div>
 
-    <div class="ai-debrief-box" id="debriefBox">
-      ${r.ai_debrief ? `
-        <div class="report-toolbar">
-          <button class="btn-toggle-report" id="btnToggleDebrief">Show full report ↓</button>
-          <button class="btn-export" id="btnExportDebrief">⬇ Export PDF</button>
-        </div>
-        <div id="debriefOutput" class="ai-output hidden">${marked.parse(r.ai_debrief)}</div>
-      ` : `<div id="debriefOutput" class="ai-output hidden"></div>`}
+    <div class="round-action-bar">
+      <div class="round-action-left">
+        <button class="btn-primary" id="btnDebriefThis" data-id="${r.id}">⚡ ${r.ai_debrief ? "Regenerate AI Analysis" : "Generate AI Analysis"}</button>
+        ${r.hole19_url ? `<button class="btn-secondary" id="btnReimport" data-id="${r.id}">↻ Re-import from Hole19</button>` : ""}
+        ${r.ai_debrief ? `
+          <button class="btn-secondary" id="btnToggleDebrief">Show full report ↓</button>
+          <button class="btn-secondary" id="btnExportDebrief">⬇ Export PDF</button>
+        ` : ""}
+      </div>
+      <button class="btn-danger" id="btnDeleteRound" data-id="${r.id}">Delete Round</button>
     </div>
 
-    <div class="detail-actions">
-      <button class="btn-primary" id="btnDebriefThis" data-id="${r.id}">⚡ ${r.ai_debrief ? "Regenerate AI Analysis" : "Generate AI Analysis"}</button>
-      ${r.hole19_url ? `<button class="btn-secondary" id="btnReimport" data-id="${r.id}">↻ Re-import from Hole19</button>` : ""}
-      <button class="btn-danger" id="btnDeleteRound" data-id="${r.id}">Delete Round</button>
+    <div class="ai-debrief-box hidden" id="debriefBox">
+      <div id="debriefOutput" class="ai-output">${r.ai_debrief ? marked.parse(r.ai_debrief) : ""}</div>
     </div>
   `;
 
@@ -685,41 +685,38 @@ async function showRoundDetail(id) {
       }
     } catch (_) {}
 
-    // Full debrief — streams into the toggle box
+    // Full debrief — stream into box, show it
     const box = document.getElementById("debriefBox");
-    out.classList.remove("hidden");
+    box.classList.remove("hidden");
     out.classList.add("streaming");
     out.innerHTML = '<span class="ai-placeholder">Generating full report…</span>';
-    if (!document.getElementById("btnToggleDebrief")) {
+
+    // Ensure toggle + export buttons exist in the action bar
+    const actionLeft = document.querySelector(".round-action-left");
+    if (actionLeft && !document.getElementById("btnToggleDebrief")) {
       const tb = document.createElement("button");
-      tb.className = "btn-toggle-report";
+      tb.className = "btn-secondary";
       tb.id = "btnToggleDebrief";
       tb.textContent = "Hide full report ↑";
-      box.insertBefore(tb, out);
       tb.addEventListener("click", toggleDebrief);
-    } else {
+      actionLeft.appendChild(tb);
+    } else if (document.getElementById("btnToggleDebrief")) {
       document.getElementById("btnToggleDebrief").textContent = "Hide full report ↑";
     }
+    if (actionLeft && !document.getElementById("btnExportDebrief")) {
+      const eb = document.createElement("button");
+      eb.className = "btn-secondary";
+      eb.id = "btnExportDebrief";
+      eb.textContent = "⬇ Export PDF";
+      eb.addEventListener("click", exportRoundDebrief);
+      actionLeft.appendChild(eb);
+    }
+
     box.scrollIntoView({ behavior: "smooth" });
     await streamAI(`/api/ai/round-debrief/${r.id}`, out);
     out.classList.remove("streaming");
     btn.disabled = false;
     btn.textContent = "↺ Regenerate AI Analysis";
-
-    // Add export button if not already present
-    if (!document.getElementById("btnExportDebrief")) {
-      const toolbar = document.createElement("div");
-      toolbar.className = "report-toolbar";
-      const tb = document.getElementById("btnToggleDebrief");
-      tb.parentNode.insertBefore(toolbar, tb);
-      toolbar.appendChild(tb);
-      const eb = document.createElement("button");
-      eb.className = "btn-export";
-      eb.id = "btnExportDebrief";
-      eb.textContent = "⬇ Export PDF";
-      toolbar.appendChild(eb);
-      eb.addEventListener("click", () => exportRoundDebrief());
-    }
   }
 
   function exportRoundDebrief() {
@@ -730,10 +727,10 @@ async function showRoundDetail(id) {
   }
 
   function toggleDebrief() {
-    const out = document.getElementById("debriefOutput");
+    const box = document.getElementById("debriefBox");
     const btn = document.getElementById("btnToggleDebrief");
-    out.classList.toggle("hidden");
-    btn.textContent = out.classList.contains("hidden") ? "Show full report ↓" : "Hide full report ↑";
+    box.classList.toggle("hidden");
+    btn.textContent = box.classList.contains("hidden") ? "Show full report ↓" : "Hide full report ↑";
   }
 
   document.getElementById("btnDebriefThis").addEventListener("click", runAiAnalysis);
