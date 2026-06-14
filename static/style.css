@@ -675,6 +675,21 @@ h3 {
 }
 
 /* ── Round short summary ── */
+.btn-gen-summary {
+  font-size: 13px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.btn-gen-summary:hover { border-color: var(--green-light); color: var(--green); }
+.round-short-summary.empty {
+  background: none;
+  border-left-color: var(--border);
+  padding: 8px 0 0 0;
+}
 .round-short-summary {
   font-size: 14px;
   line-height: 1.6;
@@ -710,6 +725,56 @@ h3 {
   margin: 6px 0 0 26px;
 }
 
+/* ── Global summary card footer ── */
+.gs-footer { margin-top: 10px; }
+.gs-view-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--green);
+  text-decoration: none;
+}
+.gs-view-link:hover { text-decoration: underline; }
+
+/* ── AI Analysis metadata bar ── */
+.ai-meta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  margin-bottom: 14px;
+  min-height: 20px;
+}
+.ai-meta-item { color: var(--text-muted); }
+.ai-meta-ok   { color: var(--green); font-weight: 500; }
+.ai-meta-stale {
+  color: var(--gold);
+  font-weight: 500;
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  padding: 3px 9px;
+  border-radius: 4px;
+}
+
+/* ── PDF export ── */
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.btn-export {
+  font-size: 12px;
+  font-weight: 500;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.btn-export:hover { border-color: var(--green-light); color: var(--green); }
+.ai-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+
 /* ── Duplicate round prompt ── */
 .import-status.warn {
   background: color-mix(in srgb, var(--gold) 12%, transparent);
@@ -720,6 +785,105 @@ h3 {
 .dup-prompt { line-height: 1.6; }
 .dup-actions { display: flex; gap: 10px; margin-top: 12px; }
 .btn-sm { padding: 7px 14px; font-size: 13px; }
+
+/* ── Tee badges ── */
+.tee-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 7px;
+  vertical-align: middle;
+  letter-spacing: .02em;
+}
+.tee-white  { background: #f0f0f0; color: #333; border: 1px solid #ccc; }
+.tee-yellow { background: #f9e04b; color: #7a6000; border: 1px solid #d4b800; }
+.tee-red    { background: #e74c3c; color: #fff; border: 1px solid #c0392b; }
+.tee-blue   { background: #2980b9; color: #fff; border: 1px solid #1a6a9a; }
+
+.ratings-tee-group { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.ratings-tee-label { font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.ratings-row { flex-wrap: wrap; }
+.tee-actions { flex-wrap: wrap; }
+
+/* ── WHS ── */
+.stat-card-highlight { border-color: var(--green-light); background: color-mix(in srgb, var(--green-pale) 40%, var(--card-bg)); }
+.whs-row { background: color-mix(in srgb, var(--green-pale) 30%, transparent); border-radius: 5px; }
+.whs-val { color: var(--green) !important; font-weight: 700; }
+.whs-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  background: var(--green);
+  color: #fff;
+  border-radius: 3px;
+  padding: 1px 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+  line-height: 1.4;
+}
+
+/* ── Courses ── */
+.courses-list { display: flex; flex-direction: column; gap: 12px; }
+.course-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.course-card:hover { border-color: var(--green-light); box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.course-card-name { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.course-card-stats { display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--text-muted); }
+.cr-badge  { color: var(--green); font-weight: 600; }
+.cr-missing { color: var(--text-muted); font-style: italic; }
+
+.course-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+@media (max-width: 800px) { .course-detail-grid { grid-template-columns: 1fr; } }
+.cd-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.cd-section h3 { font-size: 15px; color: var(--text-muted); font-weight: 600; margin-bottom: 14px; text-transform: uppercase; letter-spacing: .04em; }
+.stat-mini-row { display: flex; flex-wrap: wrap; gap: 16px; }
+.stat-mini { display: flex; flex-direction: column; gap: 2px; min-width: 80px; }
+.stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.stat-val   { font-size: 22px; font-weight: 700; color: var(--text); }
+
+.ratings-form { display: flex; flex-direction: column; gap: 12px; }
+.ratings-row { display: flex; gap: 14px; }
+.ratings-row label, .ratings-notes { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-muted); flex: 1; }
+.ratings-row input, .ratings-notes textarea { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; }
+.ratings-note { font-size: 12px; color: var(--text-muted); font-style: italic; margin-top: 4px; }
+.ratings-saved { color: var(--green); font-size: 13px; font-weight: 600; align-self: center; }
+
+.hole-table-wrap { overflow-x: auto; }
+.hole-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.hole-table th { text-align: left; padding: 7px 10px; background: var(--bg); color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border); white-space: nowrap; }
+.hole-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.hole-table .under-par { color: var(--green); font-weight: 600; }
+.hole-table .over-par  { color: #c0392b; }
+.hole-table .even-par  { color: var(--text-muted); }
+
+.course-rounds-list { display: flex; flex-direction: column; gap: 8px; }
+.course-round-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: border-color 0.15s;
+}
+.course-round-row:hover { border-color: var(--green-light); }
+.crr-date  { font-weight: 600; }
+.crr-holes { color: var(--text-muted); font-size: 12px; }
+.crr-score { color: var(--green); font-weight: 600; }
+.crr-putts { color: var(--text-muted); }
+.subtle    { color: var(--text-muted); font-style: italic; }
 
 /* ── Misc ── */
 .hidden { display: none !important; }

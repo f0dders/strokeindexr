@@ -20,6 +20,7 @@
       <li><a href="#" data-view="dashboard" class="active">Dashboard</a></li>
       <li><a href="#" data-view="rounds">Round History</a></li>
       <li><a href="#" data-view="import">Import Round</a></li>
+      <li><a href="#" data-view="courses">Courses</a></li>
       <li><a href="#" data-view="ai">AI Analysis</a></li>
     </ul>
     <div class="sidebar-footer">
@@ -40,7 +41,7 @@
           <canvas id="chartScore"></canvas>
         </div>
         <div class="chart-card">
-          <h3>Handicap Index</h3>
+          <h3>Handicap Trend</h3>
           <canvas id="chartHcp"></canvas>
         </div>
         <div class="chart-card">
@@ -105,6 +106,18 @@
       <div id="importStatus" class="import-status"></div>
     </section>
 
+    <!-- ── COURSES ── -->
+    <section id="view-courses" class="view">
+      <h1>Courses</h1>
+      <div id="coursesList" class="courses-list"></div>
+    </section>
+
+    <!-- ── COURSE DETAIL ── -->
+    <section id="view-course-detail" class="view">
+      <button class="btn-back" id="btnBackToCourses">← Back to Courses</button>
+      <div id="courseDetail"></div>
+    </section>
+
     <!-- ── AI ANALYSIS ── -->
     <section id="view-ai" class="view">
       <h1>AI Analysis</h1>
@@ -114,7 +127,9 @@
       </div>
       <div class="ai-actions">
         <button class="btn-primary" id="btnRunAi">Generate Analysis</button>
+        <button class="btn-export hidden" id="btnExportAnalysis">⬇ Export PDF</button>
       </div>
+      <div id="aiAnalysisMeta" class="ai-meta-bar"></div>
       <div id="aiOutput" class="ai-output"></div>
     </section>
 

@@ -15,6 +15,7 @@ function showView(name) {
 
   if (name === "dashboard") loadDashboard();
   if (name === "rounds") loadRounds();
+  if (name === "courses") loadCourses();
   if (name === "ai") loadAiAnalysis();
 }
 
@@ -50,14 +51,15 @@ async function apiFetch(path, opts = {}) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
-  const [summary, trends, globalSummary] = await Promise.all([
+  const [summary, trends, globalSummary, whs] = await Promise.all([
     apiFetch("/api/stats/summary").then(r => r.json()),
     apiFetch("/api/stats/trends").then(r => r.json()),
     apiFetch("/api/ai/global-summary").then(r => r.json()),
+    apiFetch("/api/whs").then(r => r.json()),
   ]);
 
-  renderStatCards(summary);
-  renderCharts(trends);
+  renderStatCards(summary, whs);
+  renderCharts(trends, whs);
   renderGlobalSummary(globalSummary.performance);
 }
 
@@ -65,55 +67,48 @@ function renderGlobalSummary(gs) {
   const el = document.getElementById("globalSummary");
   if (!el) return;
 
-  if (!gs) {
+  if (!gs?.short_summary) {
     el.innerHTML = `
       <p class="ai-placeholder" style="margin-bottom:12px">No AI summary yet.</p>
-      <button class="btn-primary" id="btnGenGlobalNow">Generate Summary Now</button>
+      <button class="btn-primary" id="btnGenGlobalNow">Go to AI Analysis to generate →</button>
     `;
-    document.getElementById("btnGenGlobalNow").addEventListener("click", async () => {
-      el.innerHTML = `<p class="ai-placeholder">Generating summary…</p>`;
-      const r = await apiFetch("/api/ai/global-summary", { method: "POST" });
-      if (r.ok) { const reader = r.body.getReader(); while (!(await reader.read()).done) {} }
-      loadDashboard();
-    });
+    document.getElementById("btnGenGlobalNow").addEventListener("click", () => showView("ai"));
     return;
   }
 
-  const updated = gs.generated_at
-    ? `<span class="gs-updated">Updated ${gs.generated_at.split("T")[0] || gs.generated_at.substring(0,10)}</span>`
-    : "";
-
   el.innerHTML = `
-    <div class="gs-snapshot">${gs.short_summary || ""}</div>
-    ${updated}
-    ${gs.full_report ? `
-      <button class="btn-toggle-report" id="btnToggleReport">Show full report ↓</button>
-      <div class="gs-full-report hidden" id="gsFullReport">
-        ${marked.parse(gs.full_report)}
-      </div>
-    ` : ""}
+    <div class="gs-snapshot">${gs.short_summary}</div>
+    <div class="gs-footer">
+      <a class="gs-view-link" href="#" id="gsViewFull">View full analysis →</a>
+    </div>
   `;
-
-  document.getElementById("btnToggleReport")?.addEventListener("click", function() {
-    const rep = document.getElementById("gsFullReport");
-    rep.classList.toggle("hidden");
-    this.textContent = rep.classList.contains("hidden") ? "Show full report ↓" : "Hide full report ↑";
+  document.getElementById("gsViewFull").addEventListener("click", e => {
+    e.preventDefault();
+    showView("ai");
   });
 }
 
-function renderStatCards(s) {
+function renderStatCards(s, whs) {
+  const whsCurrent = whs?.current;
+  const whsVal = whsCurrent?.sufficient_data
+    ? whsCurrent.index + (whsCurrent.estimated ? "*" : "")
+    : "—";
+  const whsSub = whsCurrent?.sufficient_data
+    ? (whsCurrent.estimated ? "WHS index (est.)" : "WHS index")
+    : "WHS index (need 3+ rounds)";
+
   const cards = [
-    { label: "Rounds Played", value: s.total_rounds ?? "—", sub: "total" },
-    { label: "Best Handicap", value: fmt(s.best_handicap, "", 1), sub: "index" },
-    { label: "Avg vs Par",    value: s.avg_score_vs_par != null ? (s.avg_score_vs_par >= 0 ? "+" : "") + fmt(s.avg_score_vs_par, "", 1) : "—", sub: "per round" },
-    { label: "Avg Putts",     value: fmt(s.avg_putts, "", 1), sub: "per round" },
-    { label: "Avg GIR",       value: fmt(s.avg_gir, "%"), sub: "greens in regulation" },
-    { label: "Avg Fairways",  value: fmt(s.avg_fir, "%"), sub: "fairways hit" },
-    { label: "Best Round",    value: s.best_score_vs_par != null ? (s.best_score_vs_par >= 0 ? "+" : "") + s.best_score_vs_par : "—", sub: "vs par" },
-    { label: "Up & Down",     value: fmt(s.avg_up_and_down, "%"), sub: "average" },
+    { label: "Rounds Played",  value: s.total_rounds ?? "—",  sub: "total" },
+    { label: "WHS Handicap",   value: whsVal,                  sub: whsSub, highlight: whsCurrent?.sufficient_data },
+    { label: "Avg vs Par",     value: s.avg_score_vs_par != null ? (s.avg_score_vs_par >= 0 ? "+" : "") + fmt(s.avg_score_vs_par, "", 1) : "—", sub: "per round" },
+    { label: "Avg Putts",      value: fmt(s.avg_putts, "", 1), sub: "per round" },
+    { label: "Avg GIR",        value: fmt(s.avg_gir, "%"),     sub: "greens in regulation" },
+    { label: "Avg Fairways",   value: fmt(s.avg_fir, "%"),     sub: "fairways hit" },
+    { label: "Best Round",     value: s.best_score_vs_par != null ? (s.best_score_vs_par >= 0 ? "+" : "") + s.best_score_vs_par : "—", sub: "vs par" },
+    { label: "Up & Down",      value: fmt(s.avg_up_and_down, "%"), sub: "average" },
   ];
   document.getElementById("statCards").innerHTML = cards.map(c => `
-    <div class="stat-card">
+    <div class="stat-card${c.highlight ? " stat-card-highlight" : ""}">
       <div class="label">${c.label}</div>
       <div class="value">${c.value}</div>
       <div class="sub">${c.sub}</div>
@@ -152,11 +147,58 @@ function mkChart(id, label, data, labels, color = "#2d6a4f") {
   });
 }
 
-function renderCharts(trends) {
+function mkChartMulti(id, datasets, labels) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: true, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: {
+        y: { grid: { color: "#e8eee8" } },
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }
+      }
+    }
+  });
+}
+
+function renderCharts(trends, whs) {
   if (!trends.length) return;
   const labels = trends.map(r => fmtDate(r.date));
-  mkChart("chartScore",  "Score vs Par",  trends.map(r => r.score_vs_par), labels, "#c0392b");
-  mkChart("chartHcp",    "Handicap",      trends.map(r => r.handicap),     labels, "#2d6a4f");
+  mkChart("chartScore", "Score vs Par", trends.map(r => r.score_vs_par), labels, "#c0392b");
+
+  // Handicap chart: Hole19 playing HCP + WHS index side-by-side
+  const whsHistory = whs?.history ?? [];
+  if (whsHistory.length) {
+    // Map WHS history by date for alignment with trend labels
+    const whsByDate = {};
+    whsHistory.forEach(h => { whsByDate[h.date] = h.index; });
+    const whsData = trends.map(r => whsByDate[r.date] ?? null);
+    mkChartMulti("chartHcp", [
+      {
+        label: "WHS Index",
+        data: whsData,
+        borderColor: "#2d6a4f",
+        backgroundColor: "#2d6a4f18",
+        borderWidth: 2, pointRadius: 4, pointBackgroundColor: "#2d6a4f",
+        tension: 0.3, fill: false, spanGaps: true,
+      },
+      {
+        label: "Playing HCP (Hole19)",
+        data: trends.map(r => r.handicap),
+        borderColor: "#b7950b",
+        backgroundColor: "transparent",
+        borderWidth: 2, borderDash: [5, 4], pointRadius: 3,
+        pointBackgroundColor: "#b7950b",
+        tension: 0.3, fill: false,
+      },
+    ], labels);
+  } else {
+    mkChart("chartHcp", "Playing HCP (Hole19)", trends.map(r => r.handicap), labels, "#2d6a4f");
+  }
   mkChart("chartGir",    "GIR %",         trends.map(r => r.gir_hit_pct),  labels, "#52b788");
   mkChart("chartPutts",  "Putts",         trends.map(r => r.putts),        labels, "#b7950b");
 
@@ -377,6 +419,7 @@ async function loadRounds() {
       <span class="round-date">${fmtDate(r.date)}</span>
       <span class="round-course">${r.course || "Unknown Course"}</span>
       <span class="round-holes">${r.holes || "?"} holes</span>
+      ${r.tee_colour ? `<span class="round-tee">${teeBadge(r.tee_colour)}</span>` : ""}
       <span class="round-score">${r.score ?? "—"}</span>
       ${scoreLabel(r.score_vs_par)}
     </div>
@@ -388,7 +431,10 @@ async function loadRounds() {
 
 // ── Round Detail ──────────────────────────────────────────────────────────────
 async function showRoundDetail(id) {
-  const r = await apiFetch(`/api/rounds/${id}`).then(res => res.json());
+  const [r, whs] = await Promise.all([
+    apiFetch(`/api/rounds/${id}`).then(res => res.json()),
+    apiFetch("/api/whs").then(res => res.json()),
+  ]);
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   document.querySelectorAll(".nav-links a").forEach(a => a.classList.remove("active"));
   document.getElementById("view-round-detail").classList.add("active");
@@ -397,16 +443,25 @@ async function showRoundDetail(id) {
     ? (r.score_vs_par >= 0 ? "+" : "") + r.score_vs_par + " vs par"
     : "";
 
+  // Find WHS index at this round's date (last history entry on or before this date)
+  const whsHistory = whs?.history ?? [];
+  const roundDate  = r.date ?? "";
+  const whsAtRound = whsHistory.filter(h => h.date <= roundDate).pop();
+  const whsLabel   = whsAtRound
+    ? whsAtRound.index + (whsAtRound.estimated ? "*" : "")
+    : (whs?.current?.sufficient_data ? whs.current.index : null);
+
   document.getElementById("roundDetail").innerHTML = `
     <div class="detail-header">
       <h2>${r.course || "Unknown Course"}</h2>
       <div class="detail-meta">
         <span>📅 ${fmtDate(r.date)}</span>
         <span>⛳ ${r.holes || "?"} holes</span>
+        ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
         ${r.duration ? `<span>⏱ ${r.duration}</span>` : ""}
         ${r.distance_miles ? `<span>🚶 ${r.distance_miles} miles</span>` : ""}
       </div>
-      ${r.ai_short_summary ? `<p class="round-short-summary">${r.ai_short_summary}</p>` : ""}
+      ${r.ai_short_summary ? `<p class="round-short-summary" id="roundShortSummary">${r.ai_short_summary}</p>` : ""}
     </div>
 
     <div class="detail-grid">
@@ -415,7 +470,8 @@ async function showRoundDetail(id) {
         <div class="detail-stat"><span>Score</span><span class="dval">${r.score ?? "—"}</span></div>
         <div class="detail-stat"><span>Par</span><span class="dval">${r.par ?? "—"}</span></div>
         <div class="detail-stat"><span>vs Par</span><span class="dval">${vsLabel || "—"}</span></div>
-        <div class="detail-stat"><span>Handicap</span><span class="dval">${fmt(r.handicap)}</span></div>
+        <div class="detail-stat"><span>Playing HCP (Hole19)</span><span class="dval">${fmt(r.handicap)}</span></div>
+        ${whsLabel != null ? `<div class="detail-stat whs-row"><span>WHS Index <span class="whs-badge">WHS</span></span><span class="dval whs-val">${whsLabel}</span></div>` : ""}
         <div class="detail-stat"><span>Putts</span><span class="dval">${r.putts ?? "—"}</span></div>
       </div>
       <div class="detail-card">
@@ -460,17 +516,20 @@ async function showRoundDetail(id) {
       </div>
     </div>
 
-    <div class="detail-actions">
-      <button class="btn-primary" id="btnDebriefThis" data-id="${r.id}">⚡ ${r.ai_debrief ? "Regenerate AI Debrief" : "Generate AI Debrief"}</button>
-      ${r.hole19_url ? `<button class="btn-secondary" id="btnReimport" data-id="${r.id}">↻ Re-import from Hole19</button>` : ""}
-      <button class="btn-danger"  id="btnDeleteRound" data-id="${r.id}">Delete Round</button>
+    <div class="ai-debrief-box" id="debriefBox">
+      ${r.ai_debrief ? `
+        <div class="report-toolbar">
+          <button class="btn-toggle-report" id="btnToggleDebrief">Show full report ↓</button>
+          <button class="btn-export" id="btnExportDebrief">⬇ Export PDF</button>
+        </div>
+        <div id="debriefOutput" class="ai-output hidden">${marked.parse(r.ai_debrief)}</div>
+      ` : `<div id="debriefOutput" class="ai-output hidden"></div>`}
     </div>
 
-    <div class="ai-debrief-box" id="debriefBox" ${r.ai_debrief ? "" : 'style="display:none"'}>
-      <button class="btn-toggle-report" id="btnToggleDebrief">
-        ${r.ai_debrief ? "Show full debrief ↓" : ""}
-      </button>
-      <div id="debriefOutput" class="ai-output hidden">${r.ai_debrief ? marked.parse(r.ai_debrief) : ""}</div>
+    <div class="detail-actions">
+      <button class="btn-primary" id="btnDebriefThis" data-id="${r.id}">⚡ ${r.ai_debrief ? "Regenerate AI Analysis" : "Generate AI Analysis"}</button>
+      ${r.hole19_url ? `<button class="btn-secondary" id="btnReimport" data-id="${r.id}">↻ Re-import from Hole19</button>` : ""}
+      <button class="btn-danger" id="btnDeleteRound" data-id="${r.id}">Delete Round</button>
     </div>
   `;
 
@@ -507,7 +566,10 @@ async function showRoundDetail(id) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Re-import failed");
-      // Reload the detail view with fresh data
+      if (importAiEnabled()) {
+        btn.textContent = "Generating AI summary…";
+        await apiFetch(`/api/ai/round-short-summary/${data.id}`, { method: "POST" });
+      }
       showRoundDetail(data.id);
     } catch (e) {
       btn.disabled = false;
@@ -516,29 +578,82 @@ async function showRoundDetail(id) {
     }
   });
 
-  async function runDebrief() {
-    const box = document.getElementById("debriefBox");
+  async function runAiAnalysis() {
+    const btn = document.getElementById("btnDebriefThis");
     const out = document.getElementById("debriefOutput");
-    const toggleBtn = document.getElementById("btnToggleDebrief");
-    box.style.display = "block";
+    btn.disabled = true;
+    btn.textContent = "Generating…";
+
+    // Short summary first — fast, updates the header immediately
+    try {
+      const sr = await apiFetch(`/api/ai/round-short-summary/${r.id}`, { method: "POST" });
+      const sd = await sr.json();
+      if (sr.ok && sd.summary) {
+        let snap = document.getElementById("roundShortSummary");
+        if (!snap) {
+          snap = document.createElement("p");
+          snap.id = "roundShortSummary";
+          snap.className = "round-short-summary";
+          document.querySelector(".detail-header").appendChild(snap);
+        }
+        snap.textContent = sd.summary;
+      }
+    } catch (_) {}
+
+    // Full debrief — streams into the toggle box
+    const box = document.getElementById("debriefBox");
     out.classList.remove("hidden");
     out.classList.add("streaming");
-    out.innerHTML = '<span class="ai-placeholder">Generating debrief…</span>';
-    if (toggleBtn) toggleBtn.textContent = "Hide full debrief ↑";
+    out.innerHTML = '<span class="ai-placeholder">Generating full report…</span>';
+    if (!document.getElementById("btnToggleDebrief")) {
+      const tb = document.createElement("button");
+      tb.className = "btn-toggle-report";
+      tb.id = "btnToggleDebrief";
+      tb.textContent = "Hide full report ↑";
+      box.insertBefore(tb, out);
+      tb.addEventListener("click", toggleDebrief);
+    } else {
+      document.getElementById("btnToggleDebrief").textContent = "Hide full report ↑";
+    }
     box.scrollIntoView({ behavior: "smooth" });
     await streamAI(`/api/ai/round-debrief/${r.id}`, out);
     out.classList.remove("streaming");
-    if (toggleBtn) toggleBtn.textContent = "Hide full debrief ↑";
-    document.getElementById("btnDebriefThis").textContent = "Regenerate AI Debrief";
+    btn.disabled = false;
+    btn.textContent = "↺ Regenerate AI Analysis";
+
+    // Add export button if not already present
+    if (!document.getElementById("btnExportDebrief")) {
+      const toolbar = document.createElement("div");
+      toolbar.className = "report-toolbar";
+      const tb = document.getElementById("btnToggleDebrief");
+      tb.parentNode.insertBefore(toolbar, tb);
+      toolbar.appendChild(tb);
+      const eb = document.createElement("button");
+      eb.className = "btn-export";
+      eb.id = "btnExportDebrief";
+      eb.textContent = "⬇ Export PDF";
+      toolbar.appendChild(eb);
+      eb.addEventListener("click", () => exportRoundDebrief());
+    }
   }
 
-  document.getElementById("btnDebriefThis").addEventListener("click", runDebrief);
+  function exportRoundDebrief() {
+    const content = document.getElementById("debriefOutput")?.innerHTML;
+    if (!content) return;
+    const title = `Round Debrief — ${r.course || "Unknown Course"} (${fmtDate(r.date)})`;
+    exportToPDF(title, content);
+  }
 
-  document.getElementById("btnToggleDebrief")?.addEventListener("click", function() {
+  function toggleDebrief() {
     const out = document.getElementById("debriefOutput");
+    const btn = document.getElementById("btnToggleDebrief");
     out.classList.toggle("hidden");
-    this.textContent = out.classList.contains("hidden") ? "Show full debrief ↓" : "Hide full debrief ↑";
-  });
+    btn.textContent = out.classList.contains("hidden") ? "Show full report ↓" : "Hide full report ↑";
+  }
+
+  document.getElementById("btnDebriefThis").addEventListener("click", runAiAnalysis);
+  document.getElementById("btnToggleDebrief")?.addEventListener("click", toggleDebrief);
+  document.getElementById("btnExportDebrief")?.addEventListener("click", exportRoundDebrief);
 }
 
 document.getElementById("btnBackToRounds").addEventListener("click", () => showView("rounds"));
@@ -585,6 +700,36 @@ function showDuplicatePrompt(existing, onReplace) {
   });
 }
 
+const TEE_COLOURS = ["White", "Yellow", "Red", "Blue"];
+const TEE_CSS = { White: "tee-white", Yellow: "tee-yellow", Red: "tee-red", Blue: "tee-blue" };
+
+function teeBadge(colour) {
+  if (!colour) return "";
+  return `<span class="tee-badge ${TEE_CSS[colour] || ""}">${colour}</span>`;
+}
+
+function showTeePrompt(roundId, course, onDone) {
+  setImportStatus("warn", `
+    <div class="dup-prompt">
+      <strong>Which tees did you play at ${course}?</strong>
+      <div class="dup-actions tee-actions">
+        ${TEE_COLOURS.map(t => `<button class="btn-secondary btn-sm btn-tee" data-tee="${t}">${teeBadge(t)} ${t}</button>`).join("")}
+      </div>
+    </div>
+  `);
+  document.querySelectorAll(".btn-tee").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const tee = btn.dataset.tee;
+      await apiFetch(`/api/rounds/${roundId}/tee`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tee_colour: tee }),
+      });
+      onDone(tee);
+    });
+  });
+}
+
 async function runPostImportAi(roundId, statusPrefix) {
   // Step: short summary
   setImportStatus("loading", `${statusPrefix} Generating round summary…`);
@@ -623,13 +768,16 @@ async function doUrlImport(url, overwrite = false) {
       return;
     }
     if (!r.ok) throw new Error(data.error || "Import failed");
-    const prefix = `✓ ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)} imported.`;
-    if (useAi) {
-      await runPostImportAi(data.id, prefix);
-      setImportStatus("success", `${prefix} AI analysis ready.`);
-    } else {
-      setImportStatus("success", prefix);
-    }
+    const course = data.data.course || "Unknown Course";
+    const prefix = `✓ ${course} on ${fmtDate(data.data.date)} imported.`;
+    showTeePrompt(data.id, course, async (tee) => {
+      if (useAi) {
+        await runPostImportAi(data.id, prefix);
+        setImportStatus("success", `${prefix} Tees: ${tee}. AI analysis ready.`);
+      } else {
+        setImportStatus("success", `${prefix} Tees: ${tee}.`);
+      }
+    });
     document.getElementById("importUrl").value = "";
   } catch (e) {
     setImportStatus("error", `✗ ${e.message}`);
@@ -661,14 +809,17 @@ async function doEmailImport(text, overwrite = false) {
       return;
     }
     if (!r.ok) throw new Error(data.error || "Import failed");
+    const course = data.data.course || "Unknown Course";
     const method = data.method === "ai" ? " (via AI extraction)" : "";
-    const prefix = `✓ ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)} imported${method}.`;
-    if (useAi) {
-      await runPostImportAi(data.id, prefix);
-      setImportStatus("success", `${prefix} AI analysis ready.`);
-    } else {
-      setImportStatus("success", prefix);
-    }
+    const prefix = `✓ ${course} on ${fmtDate(data.data.date)} imported${method}.`;
+    showTeePrompt(data.id, course, async (tee) => {
+      if (useAi) {
+        await runPostImportAi(data.id, prefix);
+        setImportStatus("success", `${prefix} Tees: ${tee}. AI analysis ready.`);
+      } else {
+        setImportStatus("success", `${prefix} Tees: ${tee}.`);
+      }
+    });
     document.getElementById("importEmailText").value = "";
   } catch (e) {
     setImportStatus("error", `✗ ${e.message}`);
@@ -682,20 +833,194 @@ document.getElementById("btnImportEmail").addEventListener("click", () => {
   if (text) doEmailImport(text);
 });
 
+// ── Courses ───────────────────────────────────────────────────────────────────
+async function loadCourses() {
+  const el = document.getElementById("coursesList");
+  el.innerHTML = "<p>Loading…</p>";
+  const courses = await apiFetch("/api/courses").then(r => r.json());
+  if (!courses.length) {
+    el.innerHTML = "<p class='subtle'>No courses yet. Import a round to get started.</p>";
+    return;
+  }
+  el.innerHTML = courses.map(c => `
+    <div class="course-card" data-id="${c.id}">
+      <div class="course-card-name">${c.name}</div>
+      <div class="course-card-stats">
+        <span>${c.times_played} round${c.times_played !== 1 ? "s" : ""}</span>
+        ${c.best_vs_par != null ? `<span>Best: ${c.best_vs_par > 0 ? "+" : ""}${c.best_vs_par}</span>` : ""}
+        ${c.avg_vs_par  != null ? `<span>Avg: ${c.avg_vs_par > 0 ? "+" : ""}${c.avg_vs_par}</span>` : ""}
+        ${c.avg_putts   != null ? `<span>Avg Putts: ${c.avg_putts}</span>` : ""}
+        ${c.avg_gir     != null ? `<span>GIR: ${c.avg_gir}%</span>` : ""}
+        ${c.avg_fir     != null ? `<span>FIR: ${c.avg_fir}%</span>` : ""}
+        ${TEE_COLOURS.filter(t => c[t.toLowerCase()+"_cr_18"]).map(t =>
+          `<span class="cr-badge">${teeBadge(t)} CR ${c[t.toLowerCase()+"_cr_18"]} / ${c[t.toLowerCase()+"_slope_18"] ?? "—"}</span>`
+        ).join("") || `<span class="cr-missing">No ratings set</span>`}
+      </div>
+    </div>
+  `).join("");
+  el.querySelectorAll(".course-card").forEach(card => {
+    card.addEventListener("click", () => showCourseDetail(+card.dataset.id));
+  });
+}
+
+async function showCourseDetail(id) {
+  const [c, whs] = await Promise.all([
+    apiFetch(`/api/courses/${id}`).then(r => r.json()),
+    apiFetch("/api/whs").then(r => r.json()),
+  ]);
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  document.getElementById("view-course-detail").classList.add("active");
+
+  const el = document.getElementById("courseDetail");
+  const played = c.rounds || [];
+  const perHole = c.per_hole || [];
+
+  // Stats summary
+  const scores = played.map(r => r.score_vs_par).filter(x => x != null);
+  const best   = scores.length ? Math.min(...scores) : null;
+  const avg    = scores.length ? (scores.reduce((a,b) => a+b,0)/scores.length).toFixed(1) : null;
+
+  el.innerHTML = `
+    <h1>${c.name}</h1>
+    <div class="course-detail-grid">
+
+      <div class="cd-section">
+        <h3>Overview</h3>
+        <div class="stat-mini-row">
+          <div class="stat-mini"><span class="stat-label">Times Played</span><span class="stat-val">${played.length}</span></div>
+          ${best != null ? `<div class="stat-mini"><span class="stat-label">Best Score</span><span class="stat-val">${best > 0 ? "+" : ""}${best}</span></div>` : ""}
+          ${avg  != null ? `<div class="stat-mini"><span class="stat-label">Avg Score</span><span class="stat-val">${avg > 0 ? "+" : ""}${avg}</span></div>` : ""}
+          ${c.avg_putts != null ? `<div class="stat-mini"><span class="stat-label">Avg Putts</span><span class="stat-val">${c.avg_putts ?? "—"}</span></div>` : ""}
+          ${c.avg_gir   != null ? `<div class="stat-mini"><span class="stat-label">Avg GIR</span><span class="stat-val">${c.avg_gir}%</span></div>` : ""}
+          ${c.avg_fir   != null ? `<div class="stat-mini"><span class="stat-label">Avg FIR</span><span class="stat-val">${c.avg_fir}%</span></div>` : ""}
+        </div>
+      </div>
+
+      <div class="cd-section">
+        <h3>Course Ratings</h3>
+        <form id="courseRatingsForm" class="ratings-form">
+          ${TEE_COLOURS.map(tee => `
+            <div class="ratings-tee-group">
+              <div class="ratings-tee-label">${teeBadge(tee)} ${tee} Tees</div>
+              <div class="ratings-row">
+                <label>18-Hole CR<input type="number" step="0.1" data-col="${tee.toLowerCase()}_cr_18" value="${c[tee.toLowerCase()+'_cr_18'] ?? ""}" placeholder="e.g. 70.5" /></label>
+                <label>18-Hole Slope<input type="number" data-col="${tee.toLowerCase()}_slope_18" value="${c[tee.toLowerCase()+'_slope_18'] ?? ""}" placeholder="e.g. 125" /></label>
+                <label>9-Hole CR<input type="number" step="0.1" data-col="${tee.toLowerCase()}_cr_9" value="${c[tee.toLowerCase()+'_cr_9'] ?? ""}" placeholder="e.g. 35.2" /></label>
+                <label>9-Hole Slope<input type="number" data-col="${tee.toLowerCase()}_slope_9" value="${c[tee.toLowerCase()+'_slope_9'] ?? ""}" placeholder="e.g. 120" /></label>
+              </div>
+            </div>
+          `).join("")}
+          <label class="ratings-notes">Notes<textarea id="courseNotes" rows="2">${c.notes ?? ""}</textarea></label>
+          <button type="submit" class="btn-primary" id="btnSaveRatings">Save Ratings</button>
+          <span id="ratingsSaved" class="ratings-saved hidden">Saved ✓</span>
+        </form>
+        <p class="ratings-note">CR and Slope are per tee colour. Used for WHS handicap — set at least the Yellow tees for accurate differentials.</p>
+      </div>
+
+    </div>
+
+    ${perHole.length ? `
+    <div class="cd-section">
+      <h3>Per-Hole Averages</h3>
+      <div class="hole-table-wrap">
+        <table class="hole-table">
+          <thead><tr>
+            <th>Hole</th><th>Par</th><th>Avg Score</th><th>vs Par</th><th>Avg Putts</th><th>GIR %</th><th>FIR %</th><th>Rounds</th>
+          </tr></thead>
+          <tbody>
+            ${perHole.map(h => {
+              const vp = h.avg_score != null && h.par != null ? (h.avg_score - h.par).toFixed(2) : null;
+              const vpNum = vp != null ? +vp : null;
+              const cls = vpNum == null ? "" : vpNum < -0.05 ? "under-par" : vpNum > 0.05 ? "over-par" : "even-par";
+              return `<tr>
+                <td>${h.hole}</td>
+                <td>${h.par ?? "—"}</td>
+                <td>${h.avg_score ?? "—"}</td>
+                <td class="${cls}">${vp != null ? (vpNum > 0 ? "+" : "") + vp : "—"}</td>
+                <td>${h.avg_putts ?? "—"}</td>
+                <td>${h.gir_pct != null ? h.gir_pct + "%" : "—"}</td>
+                <td>${h.fir_pct != null ? h.fir_pct + "%" : "—"}</td>
+                <td>${h.rounds}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ""}
+
+    <div class="cd-section">
+      <h3>Rounds at This Course</h3>
+      <div class="course-rounds-list">
+        ${played.length ? played.map(r => `
+          <div class="course-round-row" data-id="${r.id}">
+            <span class="crr-date">${fmtDate(r.date)}</span>
+            <span class="crr-holes">${r.holes}H</span>
+            <span class="crr-score">${r.score ?? "—"} (${r.score_vs_par != null ? (r.score_vs_par > 0 ? "+" : "") + r.score_vs_par : "—"})</span>
+            <span class="crr-putts">${r.putts ?? "—"} putts</span>
+          </div>
+        `).join("") : "<p class='subtle'>No rounds yet.</p>"}
+      </div>
+    </div>
+  `;
+
+  // Ratings form
+  document.getElementById("courseRatingsForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const body = { notes: document.getElementById("courseNotes").value || null };
+    document.querySelectorAll("#courseRatingsForm input[data-col]").forEach(inp => {
+      const v = inp.value.trim();
+      body[inp.dataset.col] = v ? (inp.dataset.col.includes("slope") ? parseInt(v) : parseFloat(v)) : null;
+    });
+    await apiFetch(`/api/courses/${id}`, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+    const saved = document.getElementById("ratingsSaved");
+    saved.classList.remove("hidden");
+    setTimeout(() => saved.classList.add("hidden"), 2000);
+  });
+
+  // Click round rows
+  el.querySelectorAll(".course-round-row").forEach(row => {
+    row.addEventListener("click", () => showRoundDetail(+row.dataset.id));
+  });
+}
+
+document.getElementById("btnBackToCourses").addEventListener("click", () => {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  document.getElementById("view-courses").classList.add("active");
+});
+
 // ── AI Analysis ───────────────────────────────────────────────────────────────
 async function loadAiAnalysis() {
   const gs = await apiFetch("/api/ai/global-summary").then(r => r.json());
   const stored = gs.performance;
+  const totalRounds = gs.total_rounds || 0;
   const out = document.getElementById("aiOutput");
   const btn = document.getElementById("btnRunAi");
+  const meta = document.getElementById("aiAnalysisMeta");
+
   if (stored?.full_report) {
-    const updated = stored.generated_at
-      ? ` <span class="gs-updated">Generated ${stored.generated_at.substring(0,10)}</span>` : "";
-    out.innerHTML = marked.parse(stored.full_report) + updated;
+    out.innerHTML = marked.parse(stored.full_report);
     btn.textContent = "↺ Regenerate";
+    document.getElementById("btnExportAnalysis").classList.remove("hidden");
+
+    // Build metadata bar
+    const generatedRounds = stored.round_count || 0;
+    const dateStr = stored.generated_at ? stored.generated_at.substring(0, 10) : "unknown";
+    const daysAgo = stored.generated_at ? Math.floor((Date.now() - new Date(stored.generated_at)) / 86400000) : null;
+    const ageLabel = daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : `${daysAgo} days ago`;
+    const stale = totalRounds > generatedRounds;
+
+    meta.innerHTML = `
+      <span class="ai-meta-item">Generated ${ageLabel} (${dateStr})</span>
+      <span class="ai-meta-item">Based on ${generatedRounds} of ${totalRounds} round${totalRounds !== 1 ? "s" : ""}</span>
+      ${stale ? `<span class="ai-meta-stale">⚠ ${totalRounds - generatedRounds} new round${totalRounds - generatedRounds > 1 ? "s" : ""} added — regenerate to include</span>` : `<span class="ai-meta-ok">✓ Up to date</span>`}
+    `;
   } else {
     out.innerHTML = '<span class="ai-placeholder">No analysis yet — click Generate to create one.</span>';
     btn.textContent = "Generate Analysis";
+    document.getElementById("btnExportAnalysis").classList.add("hidden");
+    meta.innerHTML = totalRounds > 0
+      ? `<span class="ai-meta-stale">⚠ ${totalRounds} round${totalRounds !== 1 ? "s" : ""} uploaded — generate an analysis to see insights</span>`
+      : "";
   }
 }
 
@@ -720,7 +1045,52 @@ document.getElementById("btnRunAi").addEventListener("click", async () => {
   out.classList.remove("streaming");
   document.getElementById("btnRunAi").disabled = false;
   document.getElementById("btnRunAi").textContent = "↺ Regenerate";
+  document.getElementById("btnExportAnalysis").classList.remove("hidden");
+  // Reload metadata bar now that generation is complete
+  loadAiAnalysis();
 });
+
+document.getElementById("btnExportAnalysis").addEventListener("click", () => {
+  const content = document.getElementById("aiOutput")?.innerHTML;
+  if (!content) return;
+  const label = currentAnalysis === "performance" ? "Performance Summary" : "Practice Plan";
+  exportToPDF(`FairwayIQ ${label}`, content);
+});
+
+// ── PDF export ────────────────────────────────────────────────────────────────
+function exportToPDF(title, htmlContent) {
+  const win = window.open("", "_blank");
+  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <style>
+    body { font-family: Georgia, serif; font-size: 14px; line-height: 1.7;
+           color: #1a1a1a; max-width: 720px; margin: 40px auto; padding: 0 24px; }
+    h1 { font-size: 22px; border-bottom: 2px solid #2d6a4f; padding-bottom: 8px; color: #2d6a4f; }
+    h2 { font-size: 18px; color: #2d6a4f; margin-top: 28px; }
+    h3 { font-size: 15px; margin-top: 20px; }
+    p  { margin: 10px 0; }
+    ul, ol { margin: 8px 0; padding-left: 22px; }
+    li { margin: 4px 0; }
+    strong { color: #1a1a1a; }
+    .meta { color: #666; font-size: 12px; margin-bottom: 24px; }
+    @media print {
+      body { margin: 20px; }
+      @page { margin: 20mm; }
+    }
+  </style>
+</head>
+<body>
+  <h1>${title}</h1>
+  <p class="meta">Generated by FairwayIQ · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
+  ${htmlContent}
+  <script>window.onload = () => { window.print(); }<\/script>
+</body>
+</html>`);
+  win.document.close();
+}
 
 // ── AI streaming helper ───────────────────────────────────────────────────────
 async function streamAI(endpoint, outputEl) {

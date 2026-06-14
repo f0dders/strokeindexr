@@ -7,8 +7,12 @@ from database import (
     update_notes, save_debrief, save_short_summary,
     get_global_summary, save_global_summary,
     get_stats_summary, get_trend_data,
+    get_courses, get_course, update_course_ratings,
+    get_rounds_for_course, get_all_rounds_with_course_ratings,
+    sync_courses, TEE_COLOURS,
     load_config, save_config,
 )
+from whs import current_index, index_history
 from scraper import scrape_round
 import prompts
 
@@ -71,6 +75,7 @@ def api_import():
             rid = replace_round(existing["id"], data)
         else:
             rid = insert_round(data)
+        sync_courses()
         return jsonify({"ok": True, "id": rid, "data": data})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -120,9 +125,121 @@ def api_import_email():
             rid = replace_round(existing["id"], data)
         else:
             rid = insert_round(data)
+        sync_courses()
         return jsonify({"ok": True, "id": rid, "data": data, "method": method})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Courses API ──────────────────────────────────────────────────────────────
+
+@app.route("/api/courses", methods=["GET"])
+def api_get_courses():
+    courses = get_courses()
+    # Annotate each with aggregate stats from rounds
+    import json as _json
+    for c in courses:
+        rounds = get_rounds_for_course(c["name"])
+        c["times_played"]  = len(rounds)
+        scores_vs_par = [r["score_vs_par"] for r in rounds if r.get("score_vs_par") is not None]
+        c["best_vs_par"]   = min(scores_vs_par) if scores_vs_par else None
+        c["avg_vs_par"]    = round(sum(scores_vs_par) / len(scores_vs_par), 1) if scores_vs_par else None
+        putts = [r["putts"] for r in rounds if r.get("putts")]
+        c["avg_putts"]     = round(sum(putts) / len(putts), 1) if putts else None
+        gir = [r["gir_hit_pct"] for r in rounds if r.get("gir_hit_pct") is not None]
+        c["avg_gir"]       = round(sum(gir) / len(gir), 1) if gir else None
+        fir = [r["fairway_hit_pct"] for r in rounds if r.get("fairway_hit_pct") is not None]
+        c["avg_fir"]       = round(sum(fir) / len(fir), 1) if fir else None
+    return jsonify(courses)
+
+
+@app.route("/api/courses/<int:course_id>", methods=["GET"])
+def api_get_course(course_id):
+    c = get_course(course_id)
+    if not c:
+        return jsonify({"error": "Not found"}), 404
+    rounds = get_rounds_for_course(c["name"])
+
+    # Per-hole averages across all rounds that have holes_json
+    import json as _json
+    hole_totals = {}  # seq -> {strokes, putts, gir_hits, gir_total, fir_hits, fir_total, count}
+    for r in rounds:
+        if not r.get("holes_json"):
+            continue
+        try:
+            holes = _json.loads(r["holes_json"])
+        except Exception:
+            continue
+        for h in holes:
+            seq = h.get("sequence")
+            hs  = h.get("hole_score", {})
+            ht  = h.get("hole_tee", {})
+            if seq is None:
+                continue
+            if seq not in hole_totals:
+                hole_totals[seq] = {"par": ht.get("par"), "strokes": 0, "putts": 0,
+                                    "gir_hits": 0, "gir_total": 0,
+                                    "fir_hits": 0, "fir_total": 0, "count": 0}
+            t = hole_totals[seq]
+            t["strokes"] += hs.get("total_of_strokes") or 0
+            t["putts"]   += hs.get("total_of_putts") or 0
+            t["count"]   += 1
+            if hs.get("green_in_regulation") is not None:
+                t["gir_total"] += 1
+                if hs["green_in_regulation"]:
+                    t["gir_hits"] += 1
+            par = ht.get("par", 4)
+            if par >= 4 and hs.get("fairway_hit") is not None:
+                t["fir_total"] += 1
+                if hs["fairway_hit"] in ("target", "center"):
+                    t["fir_hits"] += 1
+
+    per_hole = []
+    for seq in sorted(hole_totals):
+        t = hole_totals[seq]
+        n = t["count"]
+        per_hole.append({
+            "hole":      seq,
+            "par":       t["par"],
+            "avg_score": round(t["strokes"] / n, 2) if n else None,
+            "avg_putts": round(t["putts"]   / n, 2) if n else None,
+            "gir_pct":   round(t["gir_hits"] / t["gir_total"] * 100, 1) if t["gir_total"] else None,
+            "fir_pct":   round(t["fir_hits"] / t["fir_total"] * 100, 1) if t["fir_total"] else None,
+            "rounds":    n,
+        })
+
+    return jsonify({**c, "rounds": rounds, "per_hole": per_hole})
+
+
+@app.route("/api/courses/<int:course_id>", methods=["PUT"])
+def api_update_course(course_id):
+    body  = request.json or {}
+    notes = body.pop("notes", None)
+    update_course_ratings(course_id, ratings=body, notes=notes)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/rounds/<int:round_id>/tee", methods=["POST"])
+def api_set_tee(round_id):
+    tee = (request.json or {}).get("tee_colour", "Yellow")
+    if tee not in TEE_COLOURS:
+        return jsonify({"error": "Invalid tee colour"}), 400
+    from database import get_conn
+    with get_conn() as conn:
+        conn.execute("UPDATE rounds SET tee_colour = ? WHERE id = ?", (tee, round_id))
+        conn.commit()
+    return jsonify({"ok": True})
+
+
+# ── WHS API ───────────────────────────────────────────────────────────────────
+
+@app.route("/api/whs", methods=["GET"])
+def api_whs():
+    rounds = get_all_rounds_with_course_ratings()
+    return jsonify({
+        "current": current_index(rounds),
+        "history": index_history(rounds),
+    })
 
 
 # ── Stats API ─────────────────────────────────────────────────────────────────
@@ -254,9 +371,11 @@ def api_ai_round_short_summary(round_id):
 
 @app.route("/api/ai/global-summary", methods=["GET"])
 def api_get_global_summary():
+    total_rounds = len(get_rounds(limit=1000))
     return jsonify({
-        "performance": get_global_summary("performance"),
-        "practice":    get_global_summary("practice"),
+        "performance":  get_global_summary("performance"),
+        "practice":     get_global_summary("practice"),
+        "total_rounds": total_rounds,
     })
 
 
@@ -272,19 +391,16 @@ def api_gen_global_summary():
         # Short snapshot (non-streaming, fast)
         short_text = "".join(provider.stream(prompts.global_short_summary(rounds)))
 
-        # Full report — stream to client and accumulate
-        full_chunks = []
+        round_count = len(rounds)
+
         def generate():
-            for chunk in _safe_stream(
+            yield from _safe_stream(
                 provider,
                 prompts.performance_summary(rounds),
-                on_complete=lambda full: save_global_summary("performance", short_text, full),
-            ):
-                full_chunks.append(chunk)
-                yield chunk
+                on_complete=lambda full: save_global_summary("performance", short_text, full, round_count),
+            )
 
-        return Response(generate(), mimetype="text/plain",
-                        headers={"X-Short-Summary": short_text[:500]})
+        return Response(generate(), mimetype="text/plain")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
