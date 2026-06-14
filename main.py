@@ -1,4 +1,4 @@
-"""Entry point for FairwayIQ."""
+"""Entry point for StrokeIndexr."""
 
 import webbrowser
 import threading
@@ -14,6 +14,6 @@ def open_browser():
 
 if __name__ == "__main__":
     init_db()
-    print(f"\n⛳  FairwayIQ starting at http://127.0.0.1:{PORT}\n")
+    print(f"\n⛳  StrokeIndexr starting at http://127.0.0.1:{PORT}\n")
     threading.Thread(target=open_browser, daemon=True).start()
     app.run(host="127.0.0.1", port=PORT, debug=False)

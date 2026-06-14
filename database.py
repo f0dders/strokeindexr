@@ -1,4 +1,4 @@
-"""SQLite database layer for FairwayIQ."""
+"""SQLite database layer for StrokeIndexr."""
 
 import json
 import re
@@ -394,7 +394,10 @@ def insert_round(data: dict) -> int:
 def get_rounds(limit: int = 100, offset: int = 0) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM rounds ORDER BY date DESC, imported_at DESC LIMIT ? OFFSET ?",
+            """SELECT id, date, course, holes, score, score_vs_par, par, putts,
+                      handicap, tee_colour, handicap_excluded, ai_short_summary,
+                      holes_json
+               FROM rounds ORDER BY date DESC, imported_at DESC LIMIT ? OFFSET ?""",
             (limit, offset),
         ).fetchall()
         return [dict(r) for r in rows]

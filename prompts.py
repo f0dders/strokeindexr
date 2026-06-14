@@ -1,4 +1,4 @@
-"""AI prompt templates for FairwayIQ golf analysis."""
+"""AI prompt templates for StrokeIndexr golf analysis."""
 
 
 def parse_email(email_text: str) -> str:

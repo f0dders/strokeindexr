@@ -1,4 +1,4 @@
-"""Flask server for FairwayIQ."""
+"""Flask server for StrokeIndexr."""
 
 from flask import Flask, request, jsonify, Response, send_from_directory
 from database import (
