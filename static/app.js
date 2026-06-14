@@ -525,8 +525,9 @@ document.getElementById("btnImportEmail").addEventListener("click", async () => 
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || "Import failed");
+    const method = data.method === "ai" ? " (via AI extraction)" : "";
     status.className = "import-status success";
-    status.textContent = `✓ Round imported: ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)}`;
+    status.textContent = `✓ Round imported${method}: ${data.data.course || "Unknown Course"} on ${fmtDate(data.data.date)}`;
     document.getElementById("importEmailText").value = "";
   } catch (e) {
     status.className = "import-status error";

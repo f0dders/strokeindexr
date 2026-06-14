@@ -66,30 +66,40 @@ def api_import():
 
 @app.route("/api/import/email", methods=["POST"])
 def api_import_email():
-    """Parse a pasted Hole19 round summary email using AI and save the round."""
-    import json as _json
+    """Parse a pasted Hole19 email. Uses structured parser first, AI as fallback."""
+    import json as _json, re as _re
+    from email_parser import parse_hole19_email
     text = (request.json or {}).get("text", "").strip()
     if not text:
         return jsonify({"error": "No email text provided"}), 400
+
+    # ── Primary: structured parser (instant, no API cost) ────────────────────
     try:
-        provider = _build_provider()
-        prompt = prompts.parse_email(text)
-        raw = "".join(provider.stream(prompt))
-        # Extract JSON block from AI response
-        import re
-        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.S)
-        if not m:
-            m = re.search(r"(\{[^{}]{50,}\})", raw, re.S)
-        if not m:
-            return jsonify({"error": "AI could not extract structured data from the email", "raw": raw}), 422
-        data = _json.loads(m.group(1))
-        # Ensure required fields present
-        if not data.get("date") or not data.get("course"):
-            return jsonify({"error": "Could not extract course or date from email", "raw": raw}), 422
+        data = parse_hole19_email(text)
+        method = "structured"
+    except Exception as parse_err:
+        # ── Fallback: AI extraction ───────────────────────────────────────────
+        try:
+            provider = _build_provider()
+            raw = "".join(provider.stream(prompts.parse_email(text)))
+            m = _re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, _re.S)
+            if not m:
+                m = _re.search(r"(\{[^{}]{50,}\})", raw, _re.S)
+            if not m:
+                return jsonify({"error": f"Structured parser failed ({parse_err}) and AI could not extract data either"}), 422
+            data = _json.loads(m.group(1))
+            method = "ai"
+        except Exception as ai_err:
+            return jsonify({"error": f"Structured parse failed: {parse_err}. AI fallback failed: {ai_err}"}), 500
+
+    if not data.get("date") or not data.get("course"):
+        return jsonify({"error": "Could not extract date or course from email"}), 422
+
+    try:
         rid = insert_round(data)
         if not rid:
             return jsonify({"error": "Round already imported (duplicate)"}), 409
-        return jsonify({"ok": True, "id": rid, "data": data})
+        return jsonify({"ok": True, "id": rid, "data": data, "method": method})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
