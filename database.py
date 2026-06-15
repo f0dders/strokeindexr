@@ -189,7 +189,8 @@ def update_course_ratings(course_id: int, ratings: dict, notes: str | None):
 def get_rounds_for_course(course_name: str) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM rounds WHERE course = ? ORDER BY date DESC",
+            f"""SELECT *, {PUTTS_UNRELIABLE_EXPR} as putts_unreliable
+                FROM rounds WHERE course = ? ORDER BY date DESC""",
             (course_name,)
         ).fetchall()
         return [dict(r) for r in rows]
@@ -391,12 +392,20 @@ def insert_round(data: dict) -> int:
         return cur.lastrowid
 
 
+PUTTS_UNRELIABLE_EXPR = """(
+    holes_json IS NOT NULL AND
+    (SELECT COUNT(*) FROM json_each(holes_json)
+     WHERE json_extract(value, '$.hole_score.total_of_putts') = 0) >= 2
+)"""
+
+
 def get_rounds(limit: int = 100, offset: int = 0) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT id, date, course, holes, score, score_vs_par, par, putts,
+            f"""SELECT id, date, course, holes, score, score_vs_par, par, putts,
                       handicap, tee_colour, handicap_excluded, ai_short_summary,
-                      holes_json
+                      holes_json,
+                      {PUTTS_UNRELIABLE_EXPR} as putts_unreliable
                FROM rounds ORDER BY date DESC, imported_at DESC LIMIT ? OFFSET ?""",
             (limit, offset),
         ).fetchall()
@@ -405,7 +414,10 @@ def get_rounds(limit: int = 100, offset: int = 0) -> list[dict]:
 
 def get_round(round_id: int) -> dict | None:
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM rounds WHERE id = ?", (round_id,)).fetchone()
+        row = conn.execute(
+            f"SELECT *, {PUTTS_UNRELIABLE_EXPR} as putts_unreliable FROM rounds WHERE id = ?",
+            (round_id,)
+        ).fetchone()
         return dict(row) if row else None
 
 
@@ -514,7 +526,7 @@ def get_stats_summary() -> dict:
                 COUNT(*) as total_rounds,
                 MIN(handicap) as best_handicap,
                 AVG(score_vs_par) as avg_score_vs_par,
-                AVG(putts) as avg_putts,
+                AVG(CASE WHEN NOT (holes_json IS NOT NULL AND (SELECT COUNT(*) FROM json_each(holes_json) WHERE json_extract(value, '$.hole_score.total_of_putts') = 0) >= 2) THEN putts END) as avg_putts,
                 AVG(gir_hit_pct) as avg_gir,
                 AVG(fairway_hit_pct) as avg_fir,
                 AVG(up_and_down_pct) as avg_up_and_down,
@@ -532,8 +544,9 @@ def get_stats_summary() -> dict:
 
 def get_trend_data() -> list[dict]:
     with get_conn() as conn:
-        rows = conn.execute("""
-            SELECT date, course, holes, score_vs_par, handicap, putts,
+        rows = conn.execute(f"""
+            SELECT date, course, holes, score_vs_par, handicap,
+                   CASE WHEN {PUTTS_UNRELIABLE_EXPR} THEN NULL ELSE putts END as putts,
                    gir_hit_pct, fairway_hit_pct, pars_pct, bogeys_pct,
                    doubles_plus_pct, birdies_pct
             FROM rounds

@@ -966,6 +966,26 @@ h3 {
 .tee-actions { flex-wrap: wrap; }
 
 /* ── WHS exclusion ── */
+.putts-unreliable {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  cursor: help;
+}
+
+.putts-unreliable-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--gold) 15%, transparent);
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 1px 5px;
+  vertical-align: middle;
+  white-space: nowrap;
+  cursor: help;
+}
+
 .hcp-excluded-badge {
   font-size: 10px;
   font-weight: 700;

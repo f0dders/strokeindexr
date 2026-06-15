@@ -483,6 +483,7 @@ async function loadRounds() {
           <span class="round-holes">${r.holes || "?"} holes</span>
           ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
           ${r.handicap_excluded || (r.holes !== 9 && r.holes !== 18) ? `<span class="hcp-excluded-badge" title="${r.holes !== 9 && r.holes !== 18 ? `Non-standard (${r.holes}H)` : "Manually excluded"}">WHS excl.</span>` : ""}
+          ${r.putts_unreliable ? `<span class="putts-unreliable-badge" title="Hole19 did not record putt data for several holes">⚠ putts</span>` : ""}
         </div>
         <div class="round-score-group">
           <span class="round-score">${r.score ?? "—"}</span>
@@ -540,7 +541,7 @@ async function showRoundDetail(id) {
         <div class="detail-stat"><span>vs Par</span><span class="dval">${vsLabel || "—"}</span></div>
         <div class="detail-stat"><span>Playing HCP (Hole19)</span><span class="dval">${fmt(r.handicap)}</span></div>
         ${whsLabel != null ? `<div class="detail-stat whs-row"><span>WHS Index <span class="whs-badge">WHS</span></span><span class="dval whs-val">${whsLabel}</span></div>` : ""}
-        <div class="detail-stat"><span>Putts</span><span class="dval">${r.putts ?? "—"}</span></div>
+        <div class="detail-stat"><span>Putts</span><span class="dval">${r.putts_unreliable ? `<span class="putts-unreliable" title="Hole19 did not record putt data for several holes in this round">⚠ unreliable</span>` : (r.putts ?? "—")}</span></div>
       </div>
       <div class="detail-card">
         <h4>WHS Eligibility</h4>
@@ -1025,7 +1026,7 @@ function roundsTableHTML(rounds) {
         <span class="crr-holes">${r.holes}H</span>
         ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
         <span class="crr-score">${r.score ?? "—"} (${r.score_vs_par != null ? (r.score_vs_par > 0 ? "+" : "") + r.score_vs_par : "—"})</span>
-        <span class="crr-putts">${r.putts ?? "—"} putts</span>
+        <span class="crr-putts">${r.putts_unreliable ? "⚠ putts unreliable" : `${r.putts ?? "—"} putts`}</span>
       </div>
     `).join("")}
   </div>`;
@@ -1062,7 +1063,7 @@ function miniStatsHTML(rounds) {
   const scores = rounds.map(r => r.score_vs_par).filter(x => x != null);
   const best   = scores.length ? Math.min(...scores) : null;
   const avg    = scores.length ? (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1) : null;
-  const putts  = rounds.filter(r => r.putts).map(r => r.putts);
+  const putts  = rounds.filter(r => r.putts && !r.putts_unreliable).map(r => r.putts);
   const avgP   = putts.length ? (putts.reduce((a,b) => a+b, 0) / putts.length).toFixed(1) : null;
   return `
     <div class="stat-mini-row">

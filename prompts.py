@@ -54,7 +54,7 @@ def round_short_summary(round_data: dict) -> str:
 
 Round: {r.get('date')} | {r.get('course')} | {r.get('holes')} holes
 Score: {r.get('score')} ({'+' if (r.get('score_vs_par') or 0) >= 0 else ''}{r.get('score_vs_par')} vs par {r.get('par')})
-Putts: {r.get('putts')} | GIR: {r.get('gir_hit_pct')}% | FIR: {r.get('fairway_hit_pct')}%
+Putts: {'(unreliable)' if r.get('putts_unreliable') else r.get('putts')} | GIR: {r.get('gir_hit_pct')}% | FIR: {r.get('fairway_hit_pct')}%
 Doubles+: {r.get('doubles_plus_pct')}% | Up & Down: {r.get('up_and_down_pct')}%
 
 Return only the 2-3 sentence summary. No headers, no bullet points."""
@@ -64,7 +64,8 @@ def global_short_summary(rounds: list[dict], whs_index=None, from_date: str = No
     n = len(rounds)
     avg_vs_par = sum(r.get("score_vs_par") or 0 for r in rounds) / n if n else 0
     avg_gir    = sum(r.get("gir_hit_pct")  or 0 for r in rounds) / n if n else 0
-    avg_putts  = sum(r.get("putts")        or 0 for r in rounds) / n if n else 0
+    reliable_putts = [r["putts"] for r in rounds if r.get("putts") and not r.get("putts_unreliable")]
+    avg_putts  = sum(reliable_putts) / len(reliable_putts) if reliable_putts else 0
     hcp_str    = f"WHS {whs_index}" if whs_index is not None else "not yet calculated"
     period_str = f"{from_date} to {to_date}" if from_date and to_date else "all available rounds"
 
@@ -86,7 +87,7 @@ ROUND DATA:
 - Holes: {r.get('holes', 18)}
 - Score: {r.get('score', '?')} ({'+' if (r.get('score_vs_par') or 0) >= 0 else ''}{r.get('score_vs_par', '?')} vs par {r.get('par', '?')})
 - Handicap at time: {r.get('handicap', '?')}
-- Total Putts: {r.get('putts', '?')}
+- Total Putts: {'(not tracked — Hole19 did not record putt data for this round)' if r.get('putts_unreliable') else r.get('putts', '?')}
 
 BALL STRIKING:
 - Fairways Hit: {r.get('fairway_hit_pct', '?')}%
@@ -131,7 +132,7 @@ def performance_summary(rounds: list[dict], whs_index=None, from_date: str = Non
         rounds_text += (
             f"\n{r.get('date')} | {r.get('course')} | {r.get('holes')}H | "
             f"Score: {r.get('score')} ({vp_str} vs par {r.get('par')}) | "
-            f"Putts: {r.get('putts')} | GIR: {r.get('gir_hit_pct')}% | FIR: {r.get('fairway_hit_pct')}% | "
+            f"Putts: {'(unreliable)' if r.get('putts_unreliable') else r.get('putts')} | GIR: {r.get('gir_hit_pct')}% | FIR: {r.get('fairway_hit_pct')}% | "
             f"Doubles+: {r.get('doubles_plus_pct')}%"
         )
 
@@ -165,7 +166,8 @@ def practice_plan(rounds: list[dict], whs_index=None, from_date: str = None, to_
 
     avg_gir      = sum(r.get("gir_hit_pct")       or 0 for r in rounds) / n
     avg_fir      = sum(r.get("fairway_hit_pct")    or 0 for r in rounds) / n
-    avg_putts    = sum(r.get("putts")              or 0 for r in rounds) / n
+    reliable_putts_pp = [r["putts"] for r in rounds if r.get("putts") and not r.get("putts_unreliable")]
+    avg_putts    = sum(reliable_putts_pp) / len(reliable_putts_pp) if reliable_putts_pp else 0
     avg_ud       = sum(r.get("up_and_down_pct")    or 0 for r in rounds) / n
     avg_scramble = sum(r.get("scrambling_pct")     or 0 for r in rounds) / n
     avg_doubles  = sum(r.get("doubles_plus_pct")   or 0 for r in rounds) / n

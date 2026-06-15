@@ -173,7 +173,7 @@ def api_get_courses():
         c["times_played"]  = len(rounds)
         c["best_vs_par"]   = min(scores_vs_par) if scores_vs_par else None
         c["avg_vs_par"]    = round(sum(scores_vs_par) / len(scores_vs_par), 1) if scores_vs_par else None
-        putts = [r["putts"] for r in rounds if r.get("putts")]
+        putts = [r["putts"] for r in rounds if r.get("putts") and not r.get("putts_unreliable")]
         c["avg_putts"]     = round(sum(putts) / len(putts), 1) if putts else None
         gir = [r["gir_hit_pct"] for r in rounds if r.get("gir_hit_pct") is not None]
         c["avg_gir"]       = round(sum(gir) / len(gir), 1) if gir else None
