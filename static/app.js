@@ -600,7 +600,7 @@ async function showRoundDetail(id) {
 
     <div class="round-action-bar">
       <div class="round-action-left">
-        <button class="btn-primary" id="btnDebriefThis" data-id="${r.id}">⚡ ${r.ai_debrief ? "Regenerate AI Analysis" : "Generate AI Analysis"}</button>
+        <button class="btn-primary" id="btnDebriefThis" data-id="${r.id}">⚡ ${r.ai_debrief ? "Regenerate full report" : r.ai_short_summary ? "Generate full report" : "Generate AI Analysis"}</button>
         ${r.hole19_url ? `<button class="btn-secondary" id="btnReimport" data-id="${r.id}">↻ Re-import from Hole19</button>` : ""}
         ${r.ai_debrief ? `
           <button class="btn-secondary" id="btnToggleDebrief">Show full report ↓</button>
@@ -758,7 +758,8 @@ document.querySelectorAll(".import-tab").forEach(tab => {
 
 // ── Import helpers ────────────────────────────────────────────────────────────
 function importAiEnabled() {
-  return document.getElementById("chkImportAi")?.checked;
+  return document.getElementById("chkImportAi")?.checked ||
+         document.getElementById("chkImportAiEmail")?.checked;
 }
 
 function setImportStatus(cls, html) {
@@ -795,11 +796,16 @@ function teeBadge(colour) {
   return `<span class="tee-badge ${TEE_CSS[colour] || ""}">${colour}</span>`;
 }
 
-function showTeePrompt(roundId, course, onDone) {
-  setImportStatus("warn", `
-    <div class="dup-prompt">
-      <strong>Which tees did you play at ${course}?</strong>
-      <div class="dup-actions tee-actions">
+// ── Import wizard ─────────────────────────────────────────────────────────────
+
+function showTeePrompt(roundId, course, courseId, holes, onDone) {
+  setImportStatus("wizard", `
+    <div class="wizard-step">
+      <div class="wizard-header">
+        <span class="wizard-step-label">Step 1 of 2</span>
+        <strong>Which tees did you play at ${course}?</strong>
+      </div>
+      <div class="wizard-actions">
         ${TEE_COLOURS.map(t => `<button class="btn-secondary btn-sm btn-tee" data-tee="${t}">${teeBadge(t)} ${t}</button>`).join("")}
       </div>
     </div>
@@ -812,9 +818,96 @@ function showTeePrompt(roundId, course, onDone) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tee_colour: tee }),
       });
-      onDone(tee);
+      if (courseId) {
+        await showRatingsStep(courseId, course, tee, holes, () => onDone(tee));
+      } else {
+        onDone(tee);
+      }
     });
   });
+}
+
+async function showRatingsStep(courseId, course, tee, holes, onDone) {
+  // Check if ratings already exist for this tee
+  const status = await apiFetch(`/api/courses/${courseId}/ratings-status?tee=${tee.toLowerCase()}&holes=${holes}`)
+    .then(r => r.json()).catch(() => ({ has_ratings: true }));
+  if (status.has_ratings) { onDone(); return; }
+
+  const holeSuffix = holes <= 9 ? "9" : "18";
+  const cfg = await apiFetch("/api/config").then(r => r.json()).catch(() => ({}));
+  const aiAvailable = !!(cfg.api_key || cfg.provider === "ollama" || cfg.provider === "lmstudio");
+
+  setImportStatus("wizard", `
+    <div class="wizard-step">
+      <div class="wizard-header">
+        <span class="wizard-step-label">Step 2 of 2</span>
+        <strong>Course ratings for ${course} — ${tee} tees (${holes}H)</strong>
+        <p class="wizard-note">These are used for accurate WHS handicap and AI analysis. You can add them now or skip and add later via the Courses page.</p>
+      </div>
+      <div class="wizard-ratings-form">
+        <label class="wizard-field">
+          <span>Course Rating (CR)</span>
+          <input type="number" id="wizCr" step="0.1" min="55" max="80" placeholder="e.g. 69.5" />
+        </label>
+        <label class="wizard-field">
+          <span>Slope Rating</span>
+          <input type="number" id="wizSlope" step="1" min="55" max="155" placeholder="e.g. 118" />
+        </label>
+      </div>
+      <div id="wizAiSuggestion" class="wizard-ai-suggestion hidden"></div>
+      <div class="wizard-actions">
+        ${aiAvailable ? `<button class="btn-secondary btn-sm" id="btnWizAiLookup">✦ Ask AI</button>` : ""}
+        <button class="btn-primary btn-sm" id="btnWizSaveRatings">Save &amp; Continue</button>
+        <button class="btn-secondary btn-sm" id="btnWizSkip">Skip for now</button>
+      </div>
+    </div>
+  `);
+
+  if (aiAvailable) {
+    document.getElementById("btnWizAiLookup").addEventListener("click", async () => {
+      const btn = document.getElementById("btnWizAiLookup");
+      const box = document.getElementById("wizAiSuggestion");
+      btn.disabled = true;
+      btn.textContent = "Looking up…";
+      box.className = "wizard-ai-suggestion";
+      box.innerHTML = "Asking AI…";
+      try {
+        const res = await apiFetch("/api/courses/ai-lookup-ratings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ course, tee_colour: tee, holes }),
+        }).then(r => r.json());
+        if (res.cr && res.slope) {
+          document.getElementById("wizCr").value    = res.cr;
+          document.getElementById("wizSlope").value = res.slope;
+          const conf = res.confidence === "high" ? "✓ High confidence" : res.confidence === "medium" ? "~ Medium confidence" : "⚠ Low confidence — please verify";
+          box.innerHTML = `<span class="conf-${res.confidence}">${conf}</span> ${res.note ? `— ${res.note}` : ""}`;
+        } else {
+          box.innerHTML = `<span class="conf-low">AI couldn't find ratings for this course. Enter manually.</span>`;
+        }
+      } catch(e) {
+        box.innerHTML = `<span class="conf-low">AI lookup failed: ${e.message}</span>`;
+      }
+      btn.disabled = false;
+      btn.textContent = "✦ Ask AI";
+    });
+  }
+
+  document.getElementById("btnWizSaveRatings").addEventListener("click", async () => {
+    const cr    = parseFloat(document.getElementById("wizCr").value);
+    const slope = parseInt(document.getElementById("wizSlope").value);
+    if (!cr || !slope) { alert("Please enter both CR and Slope, or click Skip."); return; }
+    const key = `${tee.toLowerCase()}_cr_${holeSuffix}`;
+    const sKey = `${tee.toLowerCase()}_slope_${holeSuffix}`;
+    await apiFetch(`/api/courses/${courseId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [key]: cr, [sKey]: slope }),
+    });
+    onDone();
+  });
+
+  document.getElementById("btnWizSkip").addEventListener("click", () => onDone());
 }
 
 async function runPostImportAi(roundId, statusPrefix) {
@@ -867,8 +960,9 @@ async function doUrlImport(url, overwrite = false) {
     }
     if (!r.ok) throw new Error(data.error || "Import failed");
     const course = data.data.course || "Unknown Course";
+    const holes  = data.data.holes || 18;
     const prefix = `✓ ${course} on ${fmtDate(data.data.date)} imported.`;
-    showTeePrompt(data.id, course, async (tee) => {
+    showTeePrompt(data.id, course, data.course_id, holes, async (tee) => {
       if (useAi) {
         await runPostImportAi(data.id, prefix);
         setImportStatus("success", `${prefix} Tees: ${tee}. AI analysis ready.`);
@@ -908,9 +1002,10 @@ async function doEmailImport(text, overwrite = false) {
     }
     if (!r.ok) throw new Error(data.error || "Import failed");
     const course = data.data.course || "Unknown Course";
+    const holes  = data.data.holes || 18;
     const method = data.method === "ai" ? " (via AI extraction)" : "";
     const prefix = `✓ ${course} on ${fmtDate(data.data.date)} imported${method}.`;
-    showTeePrompt(data.id, course, async (tee) => {
+    showTeePrompt(data.id, course, data.course_id, holes, async (tee) => {
       if (useAi) {
         await runPostImportAi(data.id, prefix);
         setImportStatus("success", `${prefix} Tees: ${tee}. AI analysis ready.`);

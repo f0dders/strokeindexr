@@ -88,19 +88,18 @@
         <button class="import-tab" data-itab="email">Paste Email (fallback)</button>
       </div>
 
-      <div class="import-ai-toggle">
-        <label class="ai-toggle-label">
-          <input type="checkbox" id="chkImportAi" />
-          Generate AI round summary &amp; update overall analysis after import
-        </label>
-        <p class="ai-toggle-note">Adds ~20–30s to import. Requires AI configured in Settings.</p>
-      </div>
-
       <div id="itab-url" class="itab-panel">
         <p class="subtitle">Paste a Hole19 round URL to import all stats automatically, including the per-hole scorecard.</p>
         <div class="import-box">
           <input type="url" id="importUrl" placeholder="https://www.hole19golf.com/performance/rounds/XXXXXX" />
           <button class="btn-primary" id="btnImport">Import</button>
+        </div>
+        <div class="import-ai-toggle">
+          <label class="ai-toggle-label">
+            <input type="checkbox" id="chkImportAi" />
+            Generate AI round summary &amp; update overall analysis after import
+          </label>
+          <p class="ai-toggle-note">Adds ~20–30s to import. Requires AI configured in Settings.</p>
         </div>
       </div>
 
@@ -109,6 +108,13 @@
         <textarea id="importEmailText" placeholder="Paste the full email text here…"></textarea>
         <div style="margin-top:10px">
           <button class="btn-primary" id="btnImportEmail">Extract &amp; Import</button>
+        </div>
+        <div class="import-ai-toggle">
+          <label class="ai-toggle-label">
+            <input type="checkbox" id="chkImportAiEmail" />
+            Generate AI round summary &amp; update overall analysis after import
+          </label>
+          <p class="ai-toggle-note">Adds ~20–30s to import. Requires AI configured in Settings.</p>
         </div>
       </div>
 

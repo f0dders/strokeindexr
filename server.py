@@ -8,7 +8,7 @@ from database import (
     get_global_summary, save_global_summary,
     get_latest_round_date, get_rounds_in_window,
     get_stats_summary, get_trend_data,
-    get_courses, get_course, update_course_ratings,
+    get_courses, get_course, get_course_by_name, update_course_ratings,
     get_rounds_for_course, get_all_rounds_with_course_ratings,
     sync_courses, TEE_COLOURS,
     get_courses_with_hierarchy, get_suggested_links,
@@ -79,7 +79,8 @@ def api_import():
         else:
             rid = insert_round(data)
         sync_courses()
-        return jsonify({"ok": True, "id": rid, "data": data})
+        course = get_course_by_name(data.get("course", ""))
+        return jsonify({"ok": True, "id": rid, "data": data, "course_id": course["id"] if course else None})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -129,7 +130,8 @@ def api_import_email():
         else:
             rid = insert_round(data)
         sync_courses()
-        return jsonify({"ok": True, "id": rid, "data": data, "method": method})
+        course = get_course_by_name(data.get("course", ""))
+        return jsonify({"ok": True, "id": rid, "data": data, "method": method, "course_id": course["id"] if course else None})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -272,6 +274,65 @@ def api_get_course(course_id):
         "rounds_9":  rounds_9,
         "per_hole":  per_hole,
     })
+
+
+@app.route("/api/courses/<int:course_id>/ratings-status", methods=["GET"])
+def api_course_ratings_status(course_id):
+    """Return whether a course has CR/Slope stored for a given tee and hole count."""
+    tee    = request.args.get("tee", "yellow").lower()
+    holes  = int(request.args.get("holes", 18))
+    suffix = "9" if holes <= 9 else "18"
+    c = get_course(course_id)
+    if not c:
+        return jsonify({"error": "Course not found"}), 404
+    cr_key    = f"{tee}_cr_{suffix}"
+    slope_key = f"{tee}_slope_{suffix}"
+    has = bool(c.get(cr_key) and c.get(slope_key))
+    return jsonify({
+        "has_ratings": has,
+        "cr":    c.get(cr_key),
+        "slope": c.get(slope_key),
+    })
+
+
+@app.route("/api/courses/ai-lookup-ratings", methods=["POST"])
+def api_ai_lookup_ratings():
+    """Ask the configured AI provider for CR/Slope for a course + tee + holes."""
+    body       = request.json or {}
+    course     = body.get("course", "").strip()
+    tee_colour = body.get("tee_colour", "Yellow")
+    holes      = int(body.get("holes", 18))
+    if not course:
+        return jsonify({"error": "course name required"}), 400
+    try:
+        provider = _build_provider()
+    except Exception as e:
+        return jsonify({"error": f"AI not configured: {e}"}), 503
+
+    hole_str = "9-hole" if holes <= 9 else "18-hole"
+    prompt = (
+        f"I need the official WHS Course Rating (CR) and Slope Rating for the {tee_colour} tees "
+        f"at {course} ({hole_str} round) in the UK. "
+        f"If you have web search available, please search for the current official ratings from England Golf, "
+        f"the R&A, the course's own website, or a reputable source such as Golfshake or The Social Golfer. "
+        f"If you cannot search, use your training knowledge but note the limitation. "
+        f"Reply with ONLY a JSON object in this exact format with no extra text:\n"
+        f'{{ "cr": <number>, "slope": <integer>, "confidence": "high"|"medium"|"low", "note": "<source used or caveat>" }}\n'
+        f"Set confidence to 'high' only if you found the values from an authoritative source. "
+        f"Set 'medium' if you are fairly sure from training data. "
+        f"Set 'low' if you are guessing. "
+        f"Do not refuse — always return the JSON with your best estimate."
+    )
+    try:
+        raw = "".join(provider.stream(prompt))
+        import re as _re, json as _json
+        m = _re.search(r'\{[^{}]+\}', raw, _re.S)
+        if not m:
+            return jsonify({"error": "AI did not return valid JSON", "raw": raw}), 502
+        result = _json.loads(m.group(0))
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/courses/<int:course_id>", methods=["PUT"])
