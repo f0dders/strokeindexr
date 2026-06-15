@@ -1174,23 +1174,65 @@ async function showCourseDetail(id) {
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   document.getElementById("view-course-detail").classList.add("active");
 
-  const el      = document.getElementById("courseDetail");
-  const all     = c.rounds     || [];
-  const r18     = c.rounds_18  || [];
-  const r9      = c.rounds_9   || [];
-  const perHole = c.per_hole   || [];
-  const children = c.children  || [];
+  const el       = document.getElementById("courseDetail");
+  const all      = c.rounds     || [];
+  const r18      = c.rounds_18  || [];
+  const r9       = c.rounds_9   || [];
+  const perHole  = c.per_hole   || [];
+  const children = c.children   || [];
   const isParent = children.length > 0;
 
-  // Unlink button for children
+  // My Record stats
+  const scores      = all.map(r => r.score_vs_par).filter(x => x != null);
+  const best        = scores.length ? Math.min(...scores) : null;
+  const lastPlayed  = all.length ? all.slice().sort((a,b) => b.date.localeCompare(a.date))[0] : null;
+  const bestRound   = best != null ? all.find(r => r.score_vs_par === best) : null;
+  const teeBreakdown = TEE_COLOURS.map(t => {
+    const n = all.filter(r => (r.tee_colour||"").toLowerCase() === t.toLowerCase()).length;
+    return n ? `${teeBadge(t)} ${n}` : "";
+  }).filter(Boolean).join("  ");
+
   const unlinkBtn = c.parent_course_id
     ? `<button class="btn-secondary btn-sm" id="btnUnlink">Unlink from parent</button>`
     : "";
+
+  const cfg = await apiFetch("/api/config").then(r => r.json()).catch(() => ({}));
+  const aiAvailable = !!(cfg.api_key || cfg.provider === "ollama" || cfg.provider === "lmstudio");
 
   el.innerHTML = `
     <div class="cd-header-row">
       <h1>${c.name}</h1>
       ${unlinkBtn}
+    </div>
+
+    <!-- My Record banner -->
+    <div class="cd-record-banner">
+      <div class="cd-record-stat">
+        <span class="cd-record-label">Rounds played</span>
+        <span class="cd-record-val">${all.length}</span>
+      </div>
+      <div class="cd-record-stat">
+        <span class="cd-record-label">Best score</span>
+        <span class="cd-record-val">${best != null ? (best > 0 ? "+" : "") + best : "—"}</span>
+      </div>
+      <div class="cd-record-stat">
+        <span class="cd-record-label">Last played</span>
+        <span class="cd-record-val">${lastPlayed ? fmtDate(lastPlayed.date) : "—"}</span>
+      </div>
+      ${teeBreakdown ? `<div class="cd-record-stat cd-record-tees"><span class="cd-record-label">Tees played</span><span class="cd-record-val tee-breakdown">${teeBreakdown}</span></div>` : ""}
+    </div>
+
+    <!-- Description -->
+    <div class="cd-section cd-description-section">
+      <div class="cd-description-header">
+        <h3>About this course</h3>
+        ${aiAvailable ? `<button class="btn-secondary btn-sm" id="btnFetchDesc">✦ Ask AI</button>` : ""}
+      </div>
+      <textarea id="courseDescription" class="cd-description-textarea" rows="3" placeholder="Add a description of this course…">${c.description ?? ""}</textarea>
+      <div class="cd-description-actions">
+        <button class="btn-primary btn-sm" id="btnSaveDesc">Save</button>
+        <span id="descSaved" class="ratings-saved hidden">Saved ✓</span>
+      </div>
     </div>
 
     <div class="course-detail-grid">
@@ -1211,6 +1253,7 @@ async function showCourseDetail(id) {
             ${children.map(ch => `<strong>${ch.name}</strong>: ${ch.times_played ?? 0} round${ch.times_played !== 1 ? "s" : ""}`).join(" · ")}
           </p>
         ` : miniStatsHTML(all)}
+        ${all.length >= 2 ? `<canvas id="cdScoreChart" class="cd-score-chart"></canvas>` : ""}
       </div>
 
       <div class="cd-section">
@@ -1240,6 +1283,13 @@ async function showCourseDetail(id) {
       </div>
     </div>
 
+    ${bestRound ? `
+      <div class="cd-section">
+        <h3>Personal Best — ${best > 0 ? "+" : ""}${best} vs par &nbsp;<span class="cd-best-meta">${fmtDate(bestRound.date)}</span></h3>
+        <div class="cd-best-strip">${holeStripHTML(bestRound.holes_json)}</div>
+      </div>
+    ` : ""}
+
     ${perHole.length ? `<div class="cd-section"><h3>Per-Hole Averages</h3>${holeTableHTML(perHole)}</div>` : ""}
 
     <div class="cd-section">
@@ -1250,6 +1300,36 @@ async function showCourseDetail(id) {
       ` : roundsTableHTML(all)}
     </div>
   `;
+
+  // Score trend chart
+  if (all.length >= 2) {
+    const sorted = all.slice().sort((a,b) => a.date.localeCompare(b.date));
+    const labels = sorted.map(r => fmtDate(r.date));
+    const vals   = sorted.map(r => r.score_vs_par);
+    mkChart("cdScoreChart", "Score vs Par", vals, labels, "#2d6a4f");
+  }
+
+  // Description: save + AI fetch
+  document.getElementById("btnSaveDesc").addEventListener("click", async () => {
+    const desc = document.getElementById("courseDescription").value.trim() || null;
+    await apiFetch(`/api/courses/${id}`, {
+      method: "PUT", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ description: desc }),
+    });
+    document.getElementById("descSaved").classList.remove("hidden");
+    setTimeout(() => document.getElementById("descSaved").classList.add("hidden"), 2000);
+  });
+
+  document.getElementById("btnFetchDesc")?.addEventListener("click", async () => {
+    const btn = document.getElementById("btnFetchDesc");
+    btn.disabled = true; btn.textContent = "Fetching…";
+    try {
+      const res = await apiFetch(`/api/courses/${id}/ai-description`, { method: "POST" }).then(r => r.json());
+      if (res.description) document.getElementById("courseDescription").value = res.description;
+      else alert("AI couldn't find a description for this course.");
+    } catch(e) { alert("AI lookup failed: " + e.message); }
+    btn.disabled = false; btn.textContent = "✦ Ask AI";
+  });
 
   document.getElementById("courseRatingsForm").addEventListener("submit", async e => {
     e.preventDefault();

@@ -1082,6 +1082,44 @@ h3 {
 .cd-header-row { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .cd-header-row h1 { margin-bottom: 0; }
 
+/* ── Course detail: My Record banner ── */
+.cd-record-banner {
+  display: flex;
+  gap: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.cd-record-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  border-right: 1px solid var(--border);
+}
+.cd-record-stat:last-child { border-right: none; }
+.cd-record-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.cd-record-val { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.cd-record-tees .cd-record-val { font-size: 13px; padding-top: 4px; }
+.tee-breakdown { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* ── Course description ── */
+.cd-description-section { margin-bottom: 20px; }
+.cd-description-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.cd-description-header h3 { margin-bottom: 0; }
+.cd-description-textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit; }
+.cd-description-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+
+/* ── Course score trend chart ── */
+.cd-score-chart { margin-top: 16px; max-height: 160px; }
+
+/* ── Personal best strip ── */
+.cd-best-meta { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.cd-best-strip { margin-top: 6px; }
+
 .holes-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .breakdown-block { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
 .breakdown-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 10px; }

@@ -120,6 +120,11 @@ def init_db():
             conn.execute("ALTER TABLE courses ADD COLUMN parent_course_id INTEGER REFERENCES courses(id)")
         except Exception:
             pass
+        # Course description (AI-fetched or manually entered)
+        try:
+            conn.execute("ALTER TABLE courses ADD COLUMN description TEXT")
+        except Exception:
+            pass
         # Seed courses from any already-imported rounds
         _sync_courses(conn)
         conn.commit()
@@ -164,7 +169,7 @@ def get_course_by_name(name: str) -> dict | None:
 
 TEE_COLOURS = ("White", "Yellow", "Red", "Blue")
 
-def update_course_ratings(course_id: int, ratings: dict, notes: str | None):
+def update_course_ratings(course_id: int, ratings: dict, notes: str | None, description: str | None = None):
     """
     ratings: dict keyed by e.g. 'yellow_cr_18', 'yellow_slope_18', etc.
     Accepts any subset; unknown keys are ignored.
@@ -180,6 +185,8 @@ def update_course_ratings(course_id: int, ratings: dict, notes: str | None):
             vals.append(v if v not in ("", None) else None)
     sets.append("notes = ?")
     vals.append(notes)
+    sets.append("description = ?")
+    vals.append(description)
     vals.append(course_id)
     with get_conn() as conn:
         conn.execute(f"UPDATE courses SET {', '.join(sets)} WHERE id = ?", vals)

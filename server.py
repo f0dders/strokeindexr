@@ -337,10 +337,36 @@ def api_ai_lookup_ratings():
 
 @app.route("/api/courses/<int:course_id>", methods=["PUT"])
 def api_update_course(course_id):
-    body  = request.json or {}
-    notes = body.pop("notes", None)
-    update_course_ratings(course_id, ratings=body, notes=notes)
+    body        = request.json or {}
+    notes       = body.pop("notes", None)
+    description = body.pop("description", None)
+    update_course_ratings(course_id, ratings=body, notes=notes, description=description)
     return jsonify({"ok": True})
+
+
+@app.route("/api/courses/<int:course_id>/ai-description", methods=["POST"])
+def api_ai_course_description(course_id):
+    """Ask the configured AI to write a short description of a golf course."""
+    c = get_course(course_id)
+    if not c:
+        return jsonify({"error": "Course not found"}), 404
+    try:
+        provider = _build_provider()
+    except Exception as e:
+        return jsonify({"error": f"AI not configured: {e}"}), 503
+
+    prompt = (
+        f"Write a short description (2-3 sentences) of {c['name']} golf course in the UK. "
+        f"Cover the course style (parkland/links/heathland/etc.), any notable features or history, "
+        f"and the general challenge level. If you have web search available, use it to find accurate details. "
+        f"Be factual and concise. If you are not confident this course exists or have no reliable information, "
+        f"say so honestly in 1 sentence rather than inventing details."
+    )
+    try:
+        description = "".join(provider.stream(prompt)).strip()
+        return jsonify({"description": description})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/rounds/<int:round_id>/handicap-exclude", methods=["POST"])
