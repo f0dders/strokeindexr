@@ -169,10 +169,15 @@ def get_course_by_name(name: str) -> dict | None:
 
 TEE_COLOURS = ("White", "Yellow", "Red", "Blue")
 
-def update_course_ratings(course_id: int, ratings: dict, notes: str | None, description: str | None = None):
+_UNSET = object()
+
+
+def update_course_ratings(course_id: int, ratings: dict, notes=_UNSET, description=_UNSET):
     """
     ratings: dict keyed by e.g. 'yellow_cr_18', 'yellow_slope_18', etc.
     Accepts any subset; unknown keys are ignored.
+    notes/description are only written if explicitly passed (not _UNSET),
+    so saving ratings doesn't clobber notes and vice versa.
     """
     valid_cols = {
         f"{t.lower()}_{s}_{h}"
@@ -183,10 +188,14 @@ def update_course_ratings(course_id: int, ratings: dict, notes: str | None, desc
         if k in valid_cols:
             sets.append(f"{k} = ?")
             vals.append(v if v not in ("", None) else None)
-    sets.append("notes = ?")
-    vals.append(notes)
-    sets.append("description = ?")
-    vals.append(description)
+    if notes is not _UNSET:
+        sets.append("notes = ?")
+        vals.append(notes)
+    if description is not _UNSET:
+        sets.append("description = ?")
+        vals.append(description)
+    if not sets:
+        return
     vals.append(course_id)
     with get_conn() as conn:
         conn.execute(f"UPDATE courses SET {', '.join(sets)} WHERE id = ?", vals)

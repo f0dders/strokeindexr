@@ -211,6 +211,7 @@ def api_get_course(course_id):
     child_rounds = []
     for child in c["children"]:
         child["rounds"] = get_rounds_for_course(child["name"])
+        child["times_played"] = len(child["rounds"])
         child_rounds += child["rounds"]
     all_rounds = own_rounds + child_rounds
 
@@ -219,10 +220,15 @@ def api_get_course(course_id):
     rounds_9  = [r for r in all_rounds if (r.get("holes") or 0) <= 9]
     rounds = all_rounds
 
+    # Per-hole averages: only meaningful for a single physical layout. A parent
+    # course's children may be different physical 9s (front/back), so "hole 1"
+    # would mean different things — restrict this to the course's own rounds.
+    per_hole_rounds = own_rounds if c["children"] else all_rounds
+
     # Per-hole averages across all rounds that have holes_json
     import json as _json
     hole_totals = {}  # seq -> {strokes, putts, gir_hits, gir_total, fir_hits, fir_total, count}
-    for r in rounds:
+    for r in per_hole_rounds:
         if not r.get("holes_json"):
             continue
         try:
@@ -337,9 +343,10 @@ def api_ai_lookup_ratings():
 
 @app.route("/api/courses/<int:course_id>", methods=["PUT"])
 def api_update_course(course_id):
+    from database import _UNSET
     body        = request.json or {}
-    notes       = body.pop("notes", None)
-    description = body.pop("description", None)
+    notes       = body.pop("notes", _UNSET)
+    description = body.pop("description", _UNSET)
     update_course_ratings(course_id, ratings=body, notes=notes, description=description)
     return jsonify({"ok": True})
 

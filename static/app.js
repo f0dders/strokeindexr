@@ -1185,6 +1185,24 @@ function miniStatsHTML(rounds) {
     </div>`;
 }
 
+function bestRoundOf(rounds) {
+  const scores = rounds.map(r => r.score_vs_par).filter(x => x != null);
+  if (!scores.length) return null;
+  const best = Math.min(...scores);
+  return rounds.find(r => r.score_vs_par === best);
+}
+
+function hsLegendHTML() {
+  return `
+    <div class="hs-legend">
+      <span class="hs-legend-item"><span class="hs-cell hs-eagle">2</span> Eagle</span>
+      <span class="hs-legend-item"><span class="hs-cell hs-birdie">3</span> Birdie</span>
+      <span class="hs-legend-item"><span class="hs-cell hs-par">4</span> Par</span>
+      <span class="hs-legend-item"><span class="hs-cell hs-bogey">5</span> Bogey</span>
+      <span class="hs-legend-item"><span class="hs-cell hs-double">6</span> Double+</span>
+    </div>`;
+}
+
 async function showCourseDetail(id) {
   const c = await apiFetch(`/api/courses/${id}`).then(r => r.json());
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
@@ -1202,11 +1220,19 @@ async function showCourseDetail(id) {
   const scores      = all.map(r => r.score_vs_par).filter(x => x != null);
   const best        = scores.length ? Math.min(...scores) : null;
   const lastPlayed  = all.length ? all.slice().sort((a,b) => b.date.localeCompare(a.date))[0] : null;
-  const bestRound   = best != null ? all.find(r => r.score_vs_par === best) : null;
   const teeBreakdown = TEE_COLOURS.map(t => {
     const n = all.filter(r => (r.tee_colour||"").toLowerCase() === t.toLowerCase()).length;
     return n ? `${teeBadge(t)} ${n}` : "";
   }).filter(Boolean).join("  ");
+
+  // Personal best, split by hole count (a 9-hole best and an 18-hole best are
+  // different records — not comparable, so they're never merged into one).
+  const best18 = bestRoundOf(r18);
+  const best9  = bestRoundOf(r9);
+  const bestBlocks = [
+    best18 ? { round: best18, label: "18 holes" } : null,
+    best9  ? { round: best9,  label: "9 holes" }  : null,
+  ].filter(Boolean);
 
   const unlinkBtn = c.parent_course_id
     ? `<button class="btn-secondary btn-sm" id="btnUnlink">Unlink from parent</button>`
@@ -1261,10 +1287,24 @@ async function showCourseDetail(id) {
       </div>
     </div>
 
+    <!-- My Notes (personal, always visible — separate from course settings) -->
+    <div class="cd-section">
+      <h3>My Notes</h3>
+      <p class="chart-desc">Your own reminders about this course — parking, conditions, tips for next time.</p>
+      <textarea id="courseNotes" class="cd-description-textarea" rows="2" placeholder="e.g. Park behind the clubhouse, hole 7 plays longer than the yardage suggests…">${c.notes ?? ""}</textarea>
+      <div class="cd-description-actions">
+        <button class="btn-primary btn-sm" id="btnSaveNotes">Save</button>
+        <span id="notesSaved" class="ratings-saved hidden">Saved ✓</span>
+      </div>
+    </div>
+
     <!-- Score trend -->
     ${all.length >= 2 ? `
       <div class="cd-section">
         <h3>Score trend</h3>
+        <p class="chart-desc">Shots over or under par for each round here, in the order you played them — lower is better.${
+          r9.length && r18.length ? " 9-hole and 18-hole rounds are plotted as separate lines since they aren't directly comparable." : ""
+        }</p>
         <canvas id="cdScoreChart" class="cd-score-chart"></canvas>
       </div>
     ` : ""}
@@ -1272,8 +1312,9 @@ async function showCourseDetail(id) {
     <!-- Avg stats -->
     ${all.length ? `
       <div class="cd-section">
-        <h3>${isParent ? "Combined stats" : "Averages"}</h3>
+        <h3>${isParent ? "Combined Averages" : "Averages"}</h3>
         ${isParent ? `
+          <p class="chart-desc">Combines results from both halves below — click through for each one's own per-hole detail.</p>
           <div class="holes-breakdown">
             <div class="breakdown-block">
               <div class="breakdown-label">18-Hole</div>
@@ -1284,34 +1325,48 @@ async function showCourseDetail(id) {
               ${miniStatsHTML(r9)}
             </div>
           </div>
-          <p class="ratings-note" style="margin-top:10px">
-            ${children.map(ch => `<strong>${ch.name}</strong>: ${ch.times_played ?? 0} round${ch.times_played !== 1 ? "s" : ""}`).join(" · ")}
-          </p>
+          <div class="cd-children-links">
+            ${children.map(ch => `<button class="cd-child-link" data-child-id="${ch.id}"><strong>${ch.name}</strong> — ${ch.times_played ?? 0} round${ch.times_played !== 1 ? "s" : ""}</button>`).join("")}
+          </div>
         ` : miniStatsHTML(all)}
       </div>
     ` : ""}
 
     <!-- Personal best -->
-    ${bestRound ? `
+    ${bestBlocks.length ? `
       <div class="cd-section">
-        <h3>Personal best <span class="cd-best-meta">${best > 0 ? "+" : ""}${best} vs par · ${fmtDate(bestRound.date)}</span></h3>
-        <div class="cd-best-strip cd-best-strip-lg">${holeStripHTML(bestRound.holes_json)}</div>
-        <div class="hs-legend">
-          <span class="hs-legend-item"><span class="hs-cell hs-eagle">2</span> Eagle</span>
-          <span class="hs-legend-item"><span class="hs-cell hs-birdie">3</span> Birdie</span>
-          <span class="hs-legend-item"><span class="hs-cell hs-par">4</span> Par</span>
-          <span class="hs-legend-item"><span class="hs-cell hs-bogey">5</span> Bogey</span>
-          <span class="hs-legend-item"><span class="hs-cell hs-double">6</span> Double+</span>
-        </div>
+        <h3>Personal Best</h3>
+        ${bestBlocks.map(b => `
+          <div class="cd-best-block">
+            <div class="cd-best-block-label">${bestBlocks.length > 1 ? b.label : ""} <span class="cd-best-meta">${b.round.score_vs_par > 0 ? "+" : ""}${b.round.score_vs_par} vs par · ${fmtDate(b.round.date)}</span></div>
+            <div class="cd-best-strip cd-best-strip-lg">${holeStripHTML(b.round.holes_json)}</div>
+          </div>
+        `).join("")}
+        ${hsLegendHTML()}
       </div>
     ` : ""}
 
     <!-- Per-hole averages -->
-    ${perHole.length ? `<div class="cd-section"><h3>Per-hole averages</h3>${holeTableHTML(perHole)}</div>` : ""}
+    ${isParent ? `
+      <div class="cd-section">
+        <h3>Per-Hole Averages</h3>
+        <p class="chart-desc">Not shown on this combined page — the two halves are different physical holes. View each one's breakdown below:</p>
+        <div class="cd-children-links">
+          ${children.map(ch => `<button class="cd-child-link" data-child-id="${ch.id}"><strong>${ch.name}</strong></button>`).join("")}
+        </div>
+      </div>
+    ` : perHole.length ? `
+      <div class="cd-section">
+        <h3>Per-Hole Averages</h3>
+        <p class="chart-desc">Average score per hole across all your rounds here. Colour shows performance vs par — green is under, red is over.</p>
+        ${holeTableHTML(perHole)}
+        <div class="hole-card-legend">⛳ GIR &nbsp; 🎯 FIR &nbsp; ⛏ Avg putts</div>
+      </div>
+    ` : ""}
 
     <!-- All rounds -->
     <div class="cd-section">
-      <h3>Round history</h3>
+      <h3>Round History</h3>
       ${isParent ? `
         ${r18.length ? `<div class="breakdown-label" style="margin-bottom:8px">18-Hole</div>${roundsTableHTML(r18)}` : ""}
         ${r9.length  ? `<div class="breakdown-label" style="margin:16px 0 8px">9-Hole</div>${roundsTableHTML(r9)}` : ""}
@@ -1324,7 +1379,7 @@ async function showCourseDetail(id) {
         <span class="cd-settings-icon">⚙</span>
         <span class="cd-settings-title">
           <span class="cd-settings-title-main">Course Settings</span>
-          <span class="cd-settings-title-sub">Ratings, slope &amp; notes</span>
+          <span class="cd-settings-title-sub">Course Rating &amp; Slope, per tee</span>
         </span>
         <span class="cd-settings-chevron" id="cdSettingsChevron">▾</span>
       </button>
@@ -1341,7 +1396,6 @@ async function showCourseDetail(id) {
               </div>
             </div>
           `).join("")}
-          <label class="ratings-notes">Notes<textarea id="courseNotes" rows="2">${c.notes ?? ""}</textarea></label>
           <div style="display:flex;align-items:center;gap:12px">
             <button type="submit" class="btn-primary" id="btnSaveRatings">Save Ratings</button>
             <span id="ratingsSaved" class="ratings-saved hidden">Saved ✓</span>
@@ -1355,12 +1409,21 @@ async function showCourseDetail(id) {
     </div>
   `;
 
-  // Score trend chart
+  // Score trend chart(s)
   if (all.length >= 2) {
-    const sorted = all.slice().sort((a,b) => a.date.localeCompare(b.date));
-    const labels = sorted.map(r => fmtDate(r.date));
-    const vals   = sorted.map(r => r.score_vs_par);
-    mkChart("cdScoreChart", "Score vs Par", vals, labels, "#2d6a4f");
+    if (r9.length && r18.length) {
+      const dates = Array.from(new Set(all.map(r => r.date))).sort();
+      const labels = dates.map(fmtDate);
+      const map9  = {}; r9.forEach(r  => map9[r.date]  = r.score_vs_par);
+      const map18 = {}; r18.forEach(r => map18[r.date] = r.score_vs_par);
+      mkChartMulti("cdScoreChart", [
+        { label: "9 holes",  data: dates.map(d => map9[d]  ?? null), borderColor: "#b7950b", backgroundColor: "#b7950b18", borderWidth: 2, pointRadius: 4, pointBackgroundColor: "#b7950b", tension: 0.3 },
+        { label: "18 holes", data: dates.map(d => map18[d] ?? null), borderColor: "#2d6a4f", backgroundColor: "#2d6a4f18", borderWidth: 2, pointRadius: 4, pointBackgroundColor: "#2d6a4f", tension: 0.3 },
+      ], labels);
+    } else {
+      const sorted = all.slice().sort((a,b) => a.date.localeCompare(b.date));
+      mkChart("cdScoreChart", "Score vs Par", sorted.map(r => r.score_vs_par), sorted.map(r => fmtDate(r.date)), "#2d6a4f");
+    }
   }
 
   // Description: view/edit toggle, save, AI fetch
@@ -1403,6 +1466,17 @@ async function showCourseDetail(id) {
     btn.disabled = false; btn.textContent = "✦ Ask AI";
   });
 
+  // My Notes: save
+  document.getElementById("btnSaveNotes").addEventListener("click", async () => {
+    const notes = document.getElementById("courseNotes").value.trim() || null;
+    await apiFetch(`/api/courses/${id}`, {
+      method: "PUT", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ notes }),
+    });
+    document.getElementById("notesSaved").classList.remove("hidden");
+    setTimeout(() => document.getElementById("notesSaved").classList.add("hidden"), 2000);
+  });
+
   // Course settings collapsible
   document.getElementById("cdSettingsToggle").addEventListener("click", () => {
     const body = document.getElementById("cdSettingsBody");
@@ -1414,7 +1488,7 @@ async function showCourseDetail(id) {
 
   document.getElementById("courseRatingsForm").addEventListener("submit", async e => {
     e.preventDefault();
-    const body = { notes: document.getElementById("courseNotes").value || null };
+    const body = {};
     document.querySelectorAll("#courseRatingsForm input[data-col]").forEach(inp => {
       const v = inp.value.trim();
       body[inp.dataset.col] = v ? (inp.dataset.col.includes("slope") ? parseInt(v) : parseFloat(v)) : null;
@@ -1426,6 +1500,10 @@ async function showCourseDetail(id) {
 
   el.querySelectorAll(".course-round-row").forEach(row => {
     row.addEventListener("click", () => showRoundDetail(+row.dataset.id));
+  });
+
+  el.querySelectorAll(".cd-child-link").forEach(btn => {
+    btn.addEventListener("click", () => showCourseDetail(+btn.dataset.childId));
   });
 
   document.getElementById("btnUnlink")?.addEventListener("click", async () => {
