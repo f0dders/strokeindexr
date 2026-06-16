@@ -411,7 +411,7 @@ def get_rounds(limit: int = 100, offset: int = 0) -> list[dict]:
         rows = conn.execute(
             f"""SELECT id, date, course, holes, score, score_vs_par, par, putts,
                       handicap, tee_colour, handicap_excluded, ai_short_summary,
-                      holes_json,
+                      holes_json, gir_hit_pct, fairway_hit_pct,
                       {PUTTS_UNRELIABLE_EXPR} as putts_unreliable
                FROM rounds ORDER BY date DESC, imported_at DESC LIMIT ? OFFSET ?""",
             (limit, offset),

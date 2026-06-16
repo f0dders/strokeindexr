@@ -490,7 +490,14 @@ async function loadRounds() {
           ${scoreLabel(r.score_vs_par)}
         </div>
       </div>
-      ${holeStripHTML(r.holes_json)}
+      <div class="round-row-foot">
+        ${holeStripHTML(r.holes_json)}
+        <div class="round-row-chips">
+          ${r.gir_hit_pct != null ? `<span class="crr-chip" title="GIR">⛳ ${r.gir_hit_pct}%</span>` : ""}
+          ${r.fairway_hit_pct != null ? `<span class="crr-chip" title="FIR">🎯 ${r.fairway_hit_pct}%</span>` : ""}
+          ${r.putts != null && !r.putts_unreliable ? `<span class="crr-chip" title="Putts">⛏ ${r.putts}</span>` : ""}
+        </div>
+      </div>
     </div>
   `).join("");
   el.querySelectorAll(".round-row").forEach(row => {
@@ -1117,11 +1124,17 @@ function roundsTableHTML(rounds) {
   return `<div class="course-rounds-list">
     ${rounds.map(r => `
       <div class="course-round-row" data-id="${r.id}">
-        <span class="crr-date">${fmtDate(r.date)}</span>
-        <span class="crr-holes">${r.holes}H</span>
-        ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
-        <span class="crr-score">${r.score ?? "—"} (${r.score_vs_par != null ? (r.score_vs_par > 0 ? "+" : "") + r.score_vs_par : "—"})</span>
-        <span class="crr-putts">${r.putts_unreliable ? "⚠ putts unreliable" : `${r.putts ?? "—"} putts`}</span>
+        <div class="crr-main">
+          <span class="crr-date">${fmtDate(r.date)}</span>
+          <span class="crr-holes">${r.holes}H</span>
+          ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
+          <span class="crr-score">${r.score ?? "—"} (${r.score_vs_par != null ? (r.score_vs_par > 0 ? "+" : "") + r.score_vs_par : "—"})</span>
+        </div>
+        <div class="crr-chips">
+          ${r.gir_hit_pct != null ? `<span class="crr-chip" title="GIR">⛳ ${r.gir_hit_pct}%</span>` : ""}
+          ${r.fairway_hit_pct != null ? `<span class="crr-chip" title="FIR">🎯 ${r.fairway_hit_pct}%</span>` : ""}
+          <span class="crr-chip ${r.putts_unreliable ? "crr-chip-warn" : ""}" title="Putts">${r.putts_unreliable ? "⚠ putts unreliable" : `⛏ ${r.putts ?? "—"}`}</span>
+        </div>
       </div>
     `).join("")}
   </div>`;
@@ -1130,27 +1143,24 @@ function roundsTableHTML(rounds) {
 function holeTableHTML(perHole) {
   if (!perHole.length) return "";
   return `
-    <div class="hole-table-wrap">
-      <table class="hole-table">
-        <thead><tr>
-          <th>Hole</th><th>Par</th><th>Avg Score</th><th>vs Par</th><th>Avg Putts</th><th>GIR %</th><th>FIR %</th><th>Rounds</th>
-        </tr></thead>
-        <tbody>
-          ${perHole.map(h => {
-            const vp = h.avg_score != null && h.par != null ? (h.avg_score - h.par).toFixed(2) : null;
-            const vpNum = vp != null ? +vp : null;
-            const cls = vpNum == null ? "" : vpNum < -0.05 ? "under-par" : vpNum > 0.05 ? "over-par" : "even-par";
-            return `<tr>
-              <td>${h.hole}</td><td>${h.par ?? "—"}</td><td>${h.avg_score ?? "—"}</td>
-              <td class="${cls}">${vp != null ? (vpNum > 0 ? "+" : "") + vp : "—"}</td>
-              <td>${h.avg_putts ?? "—"}</td>
-              <td>${h.gir_pct != null ? h.gir_pct + "%" : "—"}</td>
-              <td>${h.fir_pct != null ? h.fir_pct + "%" : "—"}</td>
-              <td>${h.rounds}</td>
-            </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
+    <div class="hole-card-strip">
+      ${perHole.map(h => {
+        const vp = h.avg_score != null && h.par != null ? (h.avg_score - h.par).toFixed(2) : null;
+        const vpNum = vp != null ? +vp : null;
+        const cls = vpNum == null ? "" : vpNum < -0.05 ? "under-par" : vpNum > 0.05 ? "over-par" : "even-par";
+        return `
+          <div class="hole-card">
+            <div class="hole-card-num">${h.hole}</div>
+            <div class="hole-card-par">Par ${h.par ?? "—"}</div>
+            <div class="hole-card-avg ${cls}">${h.avg_score ?? "—"}</div>
+            <div class="hole-card-vp ${cls}">${vp != null ? (vpNum > 0 ? "+" : "") + vp : "—"}</div>
+            <div class="hole-card-meta">
+              ${h.gir_pct != null ? `<span title="GIR">⛳ ${h.gir_pct}%</span>` : ""}
+              ${h.fir_pct != null ? `<span title="FIR">🎯 ${h.fir_pct}%</span>` : ""}
+              <span title="Avg putts">⛏ ${h.avg_putts ?? "—"}</span>
+            </div>
+          </div>`;
+      }).join("")}
     </div>`;
 }
 
@@ -1160,12 +1170,18 @@ function miniStatsHTML(rounds) {
   const avg    = scores.length ? (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1) : null;
   const putts  = rounds.filter(r => r.putts && !r.putts_unreliable).map(r => r.putts);
   const avgP   = putts.length ? (putts.reduce((a,b) => a+b, 0) / putts.length).toFixed(1) : null;
+  const girs   = rounds.map(r => r.gir_hit_pct).filter(x => x != null);
+  const avgGir = girs.length ? (girs.reduce((a,b) => a+b, 0) / girs.length).toFixed(1) : null;
+  const firs   = rounds.map(r => r.fairway_hit_pct).filter(x => x != null);
+  const avgFir = firs.length ? (firs.reduce((a,b) => a+b, 0) / firs.length).toFixed(1) : null;
   return `
-    <div class="stat-mini-row">
-      <div class="stat-mini"><span class="stat-label">Rounds</span><span class="stat-val">${rounds.length}</span></div>
-      ${best != null ? `<div class="stat-mini"><span class="stat-label">Best</span><span class="stat-val">${best > 0 ? "+" : ""}${best}</span></div>` : ""}
-      ${avg  != null ? `<div class="stat-mini"><span class="stat-label">Avg Score</span><span class="stat-val">${avg > 0 ? "+" : ""}${avg}</span></div>` : ""}
-      ${avgP != null ? `<div class="stat-mini"><span class="stat-label">Avg Putts</span><span class="stat-val">${avgP}</span></div>` : ""}
+    <div class="cd-stat-cards">
+      <div class="cd-stat-card"><span class="cd-stat-label">Rounds</span><span class="cd-stat-val">${rounds.length}</span></div>
+      ${best  != null ? `<div class="cd-stat-card"><span class="cd-stat-label">Best</span><span class="cd-stat-val">${best > 0 ? "+" : ""}${best}</span></div>` : ""}
+      ${avg   != null ? `<div class="cd-stat-card"><span class="cd-stat-label">Avg Score</span><span class="cd-stat-val">${avg > 0 ? "+" : ""}${avg}</span></div>` : ""}
+      ${avgP  != null ? `<div class="cd-stat-card"><span class="cd-stat-label">Avg Putts</span><span class="cd-stat-val">${avgP}</span></div>` : ""}
+      ${avgGir!= null ? `<div class="cd-stat-card"><span class="cd-stat-label">Avg GIR</span><span class="cd-stat-val">${avgGir}%</span></div>` : ""}
+      ${avgFir!= null ? `<div class="cd-stat-card"><span class="cd-stat-label">Avg FIR</span><span class="cd-stat-val">${avgFir}%</span></div>` : ""}
     </div>`;
 }
 
@@ -1226,12 +1242,22 @@ async function showCourseDetail(id) {
     <div class="cd-section">
       <div class="cd-description-header">
         <h3>About this course</h3>
-        ${aiAvailable ? `<button class="btn-secondary btn-sm" id="btnFetchDesc">✦ Ask AI</button>` : ""}
+        <div class="cd-description-header-actions">
+          ${aiAvailable ? `<button class="btn-secondary btn-sm" id="btnFetchDesc">✦ Ask AI</button>` : ""}
+          <button class="btn-icon" id="btnEditDesc" title="Edit description">✎</button>
+        </div>
       </div>
-      <textarea id="courseDescription" class="cd-description-textarea" rows="3" placeholder="Add a description of this course…">${c.description ?? ""}</textarea>
-      <div class="cd-description-actions">
-        <button class="btn-primary btn-sm" id="btnSaveDesc">Save</button>
-        <span id="descSaved" class="ratings-saved hidden">Saved ✓</span>
+      <div id="descView" class="cd-description-view ${c.description ? "" : "cd-description-empty"}">${
+        c.description ? marked.parse(c.description) : "No description yet — click ✎ to add one, or ✦ Ask AI to fetch one."
+      }</div>
+      <div id="descEdit" class="cd-description-edit hidden">
+        <textarea id="courseDescription" class="cd-description-textarea" rows="4" placeholder="Add a description of this course…">${c.description ?? ""}</textarea>
+        <p class="ratings-note">Supports basic markdown — **bold**, *italic*, and lists.</p>
+        <div class="cd-description-actions">
+          <button class="btn-primary btn-sm" id="btnSaveDesc">Save</button>
+          <button class="btn-secondary btn-sm" id="btnCancelDesc">Cancel</button>
+          <span id="descSaved" class="ratings-saved hidden">Saved ✓</span>
+        </div>
       </div>
     </div>
 
@@ -1269,7 +1295,14 @@ async function showCourseDetail(id) {
     ${bestRound ? `
       <div class="cd-section">
         <h3>Personal best <span class="cd-best-meta">${best > 0 ? "+" : ""}${best} vs par · ${fmtDate(bestRound.date)}</span></h3>
-        <div class="cd-best-strip">${holeStripHTML(bestRound.holes_json)}</div>
+        <div class="cd-best-strip cd-best-strip-lg">${holeStripHTML(bestRound.holes_json)}</div>
+        <div class="hs-legend">
+          <span class="hs-legend-item"><span class="hs-cell hs-eagle">2</span> Eagle</span>
+          <span class="hs-legend-item"><span class="hs-cell hs-birdie">3</span> Birdie</span>
+          <span class="hs-legend-item"><span class="hs-cell hs-par">4</span> Par</span>
+          <span class="hs-legend-item"><span class="hs-cell hs-bogey">5</span> Bogey</span>
+          <span class="hs-legend-item"><span class="hs-cell hs-double">6</span> Double+</span>
+        </div>
       </div>
     ` : ""}
 
@@ -1287,10 +1320,14 @@ async function showCourseDetail(id) {
 
     <!-- Course settings (collapsible) -->
     <div class="cd-section cd-section-settings">
-      <div class="cd-settings-toggle" id="cdSettingsToggle">
-        <h3>Course settings</h3>
-        <span class="cd-settings-chevron" id="cdSettingsChevron">▼</span>
-      </div>
+      <button type="button" class="cd-settings-toggle" id="cdSettingsToggle">
+        <span class="cd-settings-icon">⚙</span>
+        <span class="cd-settings-title">
+          <span class="cd-settings-title-main">Course Settings</span>
+          <span class="cd-settings-title-sub">Ratings, slope &amp; notes</span>
+        </span>
+        <span class="cd-settings-chevron" id="cdSettingsChevron">▾</span>
+      </button>
       <div class="cd-settings-body hidden" id="cdSettingsBody">
         <form id="courseRatingsForm" class="ratings-form" style="margin-top:4px">
           ${TEE_COLOURS.map(tee => `
@@ -1326,13 +1363,29 @@ async function showCourseDetail(id) {
     mkChart("cdScoreChart", "Score vs Par", vals, labels, "#2d6a4f");
   }
 
-  // Description: save + AI fetch
+  // Description: view/edit toggle, save, AI fetch
+  function openDescEdit() {
+    document.getElementById("descView").classList.add("hidden");
+    document.getElementById("descEdit").classList.remove("hidden");
+    document.getElementById("courseDescription").focus();
+  }
+  function closeDescEdit() {
+    document.getElementById("descView").classList.remove("hidden");
+    document.getElementById("descEdit").classList.add("hidden");
+  }
+  document.getElementById("btnEditDesc").addEventListener("click", openDescEdit);
+  document.getElementById("btnCancelDesc").addEventListener("click", closeDescEdit);
+
   document.getElementById("btnSaveDesc").addEventListener("click", async () => {
     const desc = document.getElementById("courseDescription").value.trim() || null;
     await apiFetch(`/api/courses/${id}`, {
       method: "PUT", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ description: desc }),
     });
+    const view = document.getElementById("descView");
+    view.innerHTML = desc ? marked.parse(desc) : "No description yet — click ✎ to add one, or ✦ Ask AI to fetch one.";
+    view.classList.toggle("cd-description-empty", !desc);
+    closeDescEdit();
     document.getElementById("descSaved").classList.remove("hidden");
     setTimeout(() => document.getElementById("descSaved").classList.add("hidden"), 2000);
   });
@@ -1342,8 +1395,10 @@ async function showCourseDetail(id) {
     btn.disabled = true; btn.textContent = "Fetching…";
     try {
       const res = await apiFetch(`/api/courses/${id}/ai-description`, { method: "POST" }).then(r => r.json());
-      if (res.description) document.getElementById("courseDescription").value = res.description;
-      else alert("AI couldn't find a description for this course.");
+      if (res.description) {
+        document.getElementById("courseDescription").value = res.description;
+        openDescEdit();
+      } else alert("AI couldn't find a description for this course.");
     } catch(e) { alert("AI lookup failed: " + e.message); }
     btn.disabled = false; btn.textContent = "✦ Ask AI";
   });
@@ -1353,7 +1408,8 @@ async function showCourseDetail(id) {
     const body = document.getElementById("cdSettingsBody");
     const chevron = document.getElementById("cdSettingsChevron");
     body.classList.toggle("hidden");
-    chevron.textContent = body.classList.contains("hidden") ? "▼" : "▲";
+    document.getElementById("cdSettingsToggle").classList.toggle("open", !body.classList.contains("hidden"));
+    chevron.textContent = body.classList.contains("hidden") ? "▾" : "▴";
   });
 
   document.getElementById("courseRatingsForm").addEventListener("submit", async e => {

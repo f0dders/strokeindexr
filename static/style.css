@@ -208,12 +208,21 @@ h3 {
   border-color: var(--green-light);
   box-shadow: 0 2px 16px rgba(45,106,79,.12);
 }
+.round-row-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.round-row-chips { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .hole-strip {
   display: flex;
   gap: 12px;
   flex-wrap: nowrap;
   align-items: center;
   padding: 2px 0;
+  overflow-x: auto;
 }
 .hs-cell {
   width: 20px;
@@ -1108,22 +1117,56 @@ h3 {
 .tee-breakdown { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 /* ── Course description ── */
-.cd-description-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.cd-description-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .cd-description-header h3 { margin-bottom: 0; }
+.cd-description-header-actions { display: flex; align-items: center; gap: 8px; }
+.btn-icon {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--text-muted);
+  cursor: pointer; font-size: 14px; transition: border-color .15s, color .15s;
+}
+.btn-icon:hover { border-color: var(--green-light); color: var(--green); }
+.cd-description-view { font-size: 14px; line-height: 1.65; color: var(--text); }
+.cd-description-view p { margin-bottom: 8px; }
+.cd-description-view p:last-child { margin-bottom: 0; }
+.cd-description-empty { color: var(--text-muted); font-style: italic; }
 .cd-description-textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit; }
 .cd-description-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 
 /* ── Course score trend chart ── */
 .cd-score-chart { margin-top: 16px; max-height: 180px; }
 
+/* ── Course averages stat cards ── */
+.cd-stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
+.cd-stat-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.cd-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.cd-stat-val   { font-size: 22px; font-weight: 700; color: var(--text); }
+
 /* ── Personal best strip ── */
 .cd-best-meta { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 8px; }
 .cd-best-strip { margin-top: 8px; }
+.cd-best-strip-lg .hs-cell { width: 28px; height: 28px; font-size: 13px; }
+.cd-best-strip-lg .hole-strip { gap: 16px; }
+.hs-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.hs-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.hs-legend-item .hs-cell { width: 18px; height: 18px; font-size: 10px; pointer-events: none; }
 
 /* ── Course settings section (ratings) ── */
-.cd-settings-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
-.cd-settings-toggle h3 { margin-bottom: 0; }
-.cd-settings-chevron { font-size: 11px; color: var(--text-muted); transition: transform 0.2s; }
+.cd-settings-toggle {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  cursor: pointer; user-select: none;
+  background: none; border: none; padding: 0; text-align: left; font-family: inherit;
+}
+.cd-settings-icon { font-size: 18px; color: var(--text-muted); flex-shrink: 0; }
+.cd-settings-title { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+.cd-settings-title-main { font-size: 13px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: .05em; }
+.cd-settings-title-sub { font-size: 12px; color: var(--text-muted); }
+.cd-settings-chevron { font-size: 13px; color: var(--text-muted); transition: transform 0.2s; flex-shrink: 0; }
+.cd-settings-toggle.open .cd-settings-chevron { transform: rotate(180deg); }
+.cd-settings-toggle:hover .cd-settings-icon,
+.cd-settings-toggle:hover .cd-settings-title-main { color: var(--green); }
 .cd-settings-body { margin-top: 16px; }
 .cd-settings-body.hidden { display: none; }
 
@@ -1150,10 +1193,6 @@ h3 {
 .cd-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
 .cd-section h3 { font-size: 11px; color: var(--text-muted); font-weight: 700; margin-bottom: 14px; text-transform: uppercase; letter-spacing: .07em; }
 .cd-section-settings { background: color-mix(in srgb, var(--bg) 60%, var(--card-bg)); border-style: dashed; box-shadow: none; }
-.stat-mini-row { display: flex; flex-wrap: wrap; gap: 16px; }
-.stat-mini { display: flex; flex-direction: column; gap: 2px; min-width: 80px; }
-.stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
-.stat-val   { font-size: 22px; font-weight: 700; color: var(--text); }
 
 .ratings-form { display: flex; flex-direction: column; gap: 12px; }
 .ratings-row { display: flex; gap: 14px; }
@@ -1162,33 +1201,61 @@ h3 {
 .ratings-note { font-size: 12px; color: var(--text-muted); font-style: italic; margin-top: 4px; }
 .ratings-saved { color: var(--green); font-size: 13px; font-weight: 600; align-self: center; }
 
-.hole-table-wrap { overflow-x: auto; }
-.hole-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.hole-table th { text-align: left; padding: 7px 10px; background: var(--bg); color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border); white-space: nowrap; }
-.hole-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
-.hole-table .under-par { color: var(--green); font-weight: 600; }
-.hole-table .over-par  { color: #c0392b; }
-.hole-table .even-par  { color: var(--text-muted); }
+/* ── Per-hole averages: visual card strip ── */
+.hole-card-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.hole-card {
+  flex: 1 0 90px;
+  min-width: 90px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+.hole-card-num { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.hole-card-par { font-size: 11px; color: var(--text-muted); }
+.hole-card-avg { font-size: 20px; font-weight: 700; margin-top: 2px; }
+.hole-card-vp  { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.hole-card-meta { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-muted); }
+.hole-card .under-par { color: var(--green); }
+.hole-card .over-par  { color: #c0392b; }
+.hole-card .even-par  { color: var(--text-muted); }
 
 .course-rounds-list { display: flex; flex-direction: column; gap: 8px; }
 .course-round-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 12px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 10px 14px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
+  flex-wrap: wrap;
   transition: border-color 0.15s;
 }
 .course-round-row:hover { border-color: var(--green-light); }
+.crr-main  { display: flex; align-items: center; gap: 12px; }
 .crr-date  { font-weight: 600; }
 .crr-holes { color: var(--text-muted); font-size: 12px; }
 .crr-score { color: var(--green); font-weight: 600; }
-.crr-putts { color: var(--text-muted); }
+.crr-chips { display: flex; align-items: center; gap: 8px; }
+.crr-chip {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.crr-chip-warn { color: var(--gold); border-color: var(--gold); }
 .subtle    { color: var(--text-muted); font-style: italic; }
 
 /* ── Misc ── */
