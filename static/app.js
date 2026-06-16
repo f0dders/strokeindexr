@@ -388,6 +388,50 @@ function initShotMaps(holesJson) {
   });
 }
 
+// ── TV-style scorecard banner ───────────────────────────────────────────────
+function tvScorecardHTML(holes, totalPar, totalScore, totalVsPLabel, totalVsPClass) {
+  const isEighteen = holes.length > 9;
+  const front = holes.slice(0, 9);
+  const back  = isEighteen ? holes.slice(9) : [];
+  const sum   = (hs, fn) => hs.reduce((s, h) => s + fn(h), 0);
+  const outPar   = sum(front, h => h.hole_tee.par);
+  const inPar    = sum(back,  h => h.hole_tee.par);
+  const outScore = sum(front, h => h.hole_score.total_of_strokes);
+  const inScore  = sum(back,  h => h.hole_score.total_of_strokes);
+
+  function buildRow(rowCls, label, valueFn, outVal, inVal, totalVal, totalCls = "") {
+    let cells = "";
+    holes.forEach((h, i) => {
+      cells += `<div class="tv-cell">${valueFn(h)}</div>`;
+      if (i === 8 && isEighteen) cells += `<div class="tv-cell tv-sub">${outVal}</div>`;
+    });
+    if (isEighteen) cells += `<div class="tv-cell tv-sub">${inVal}</div>`;
+    cells += `<div class="tv-cell tv-total ${totalCls}">${totalVal}</div>`;
+    return `<div class="tv-row ${rowCls}"><div class="tv-cell tv-rowlabel">${label}</div>${cells}</div>`;
+  }
+
+  const holeRow = buildRow("tv-row-holes", "", h => h.sequence, "OUT", "IN", "TOT");
+  const parRow   = buildRow("tv-row-par", "Par", h => h.hole_tee.par, outPar, inPar, totalPar);
+  const scoreRow = buildRow("tv-row-score", "Score", h => {
+    const strokes = h.hole_score.total_of_strokes;
+    const par     = h.hole_tee.par;
+    const d = strokes - par;
+    const cls = d <= -2 ? "hs-eagle" : d === -1 ? "hs-birdie" : d === 0 ? "hs-par" : d === 1 ? "hs-bogey" : "hs-double";
+    return `<span class="hs-cell ${cls}">${strokes}</span>`;
+  }, outScore, inScore, totalScore, totalVsPClass);
+
+  return `
+    <div class="tv-scorecard">
+      ${holeRow}
+      ${parRow}
+      ${scoreRow}
+      <div class="tv-vs-par-row">
+        <span class="tv-vs-par-badge ${totalVsPClass}">${totalVsPLabel}</span>
+        <span class="tv-vs-par-text">vs par</span>
+      </div>
+    </div>`;
+}
+
 // ── Scorecard renderer ────────────────────────────────────────────────────────
 function renderScorecard(holesJson) {
   if (!holesJson) return "";
@@ -443,10 +487,12 @@ function renderScorecard(holesJson) {
 
   const totalVsP = totalScore - totalPar;
   const totalVsPLabel = totalVsP === 0 ? "E" : (totalVsP > 0 ? `+${totalVsP}` : `${totalVsP}`);
+  const totalVsPClass = totalVsP < 0 ? "tv-badge-under" : totalVsP === 0 ? "tv-badge-even" : "tv-badge-over";
 
   return `
     <div class="scorecard-section">
       <h4>Scorecard</h4>
+      ${tvScorecardHTML(holes, totalPar, totalScore, totalVsPLabel, totalVsPClass)}
       <table class="scorecard-table">
         <thead>
           <tr>

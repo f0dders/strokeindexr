@@ -473,6 +473,68 @@ h3 {
   color: var(--text-muted);
   margin-bottom: 14px;
 }
+/* ── TV-style scorecard banner ── */
+.tv-scorecard {
+  background: linear-gradient(135deg, #1a3d2e, #2d6a4f);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+}
+.tv-row { display: flex; align-items: center; gap: 2px; }
+.tv-row + .tv-row { margin-top: 4px; }
+.tv-cell {
+  flex: 1 0 30px;
+  min-width: 30px;
+  text-align: center;
+  color: #eafaf0;
+  font-size: 13px;
+}
+.tv-rowlabel {
+  flex: 0 0 48px;
+  min-width: 48px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #9fd8b8;
+}
+.tv-row-holes .tv-cell { font-size: 11px; font-weight: 700; color: #9fd8b8; }
+.tv-row-par .tv-cell { font-size: 12px; color: #bfe6cf; }
+.tv-row-score .tv-cell { padding: 2px 0; }
+.tv-sub {
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255,255,255,.08);
+  border-radius: 4px;
+}
+.tv-total {
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255,255,255,.16);
+  border-radius: 4px;
+}
+.tv-row-score .hs-cell { width: 26px; height: 26px; font-size: 13px; font-weight: 800; color: #fff; }
+.tv-row-score .hs-par { color: #eafaf0; }
+.tv-row-score .hs-eagle  { border-color: #f59e0b; color: #fde68a; }
+.tv-row-score .hs-birdie { border-color: #4ade80; color: #bbf7d0; }
+.tv-row-score .hs-bogey  { border-color: #fb923c; color: #fed7aa; }
+.tv-row-score .hs-double { border-color: #f87171; color: #fecaca; }
+.tv-vs-par-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.15); }
+.tv-vs-par-badge {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(255,255,255,.18);
+  border-radius: 6px;
+  padding: 3px 12px;
+}
+.tv-vs-par-badge.tv-badge-under { background: #f59e0b; color: #2a1c00; }
+.tv-vs-par-badge.tv-badge-even  { background: #e2e8f0; color: #1a2e1a; }
+.tv-vs-par-badge.tv-badge-over  { background: rgba(255,255,255,.18); }
+.tv-vs-par-text { font-size: 12px; color: #bfe6cf; }
+
 .scorecard-table {
   width: 100%;
   border-collapse: collapse;
