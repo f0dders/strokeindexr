@@ -1,6 +1,34 @@
 """AI prompt templates for StrokeIndexr golf analysis."""
 
+import json as _json
 from datetime import date as _date
+
+
+def _location_context(r: dict) -> str:
+    """Return a brief climate/location note based on hole 1 GPS coordinates."""
+    try:
+        holes = _json.loads(r.get("holes_json") or "[]")
+        if not holes:
+            return ""
+        h1 = holes[0].get("hole_score", {})
+        lat = h1.get("tee_latitude")
+        lon = h1.get("tee_longitude")
+        if lat is None or lon is None:
+            return ""
+        # Rough region detection by lat/lon bounding boxes
+        if 49 <= lat <= 61 and -11 <= lon <= 2:
+            return "UK/Ireland (temperate maritime climate — wind, cold, and rain are normal playing conditions here)"
+        if 35 <= lat <= 71 and 2 <= lon <= 32:
+            return "Continental Europe (temperate climate — seasonal variation, wind normal)"
+        if 25 <= lat <= 50 and -125 <= lon <= -65:
+            return "North America"
+        if -45 <= lat <= -10 and 110 <= lon <= 155:
+            return "Australia/New Zealand"
+        if lat >= 55:
+            return "Northern latitude — cold and wind are routine conditions"
+        return ""
+    except Exception:
+        return ""
 
 
 def _weather_str(r: dict) -> str:
@@ -168,6 +196,7 @@ ROUND DATA:
 - Distance walked: {f"{r.get('distance_miles')} miles" if r.get('distance_miles') else 'not recorded'}
 
 CONDITIONS:
+- Location: {_location_context(r) or "Unknown"}
 - Weather: {_weather_str(r)}
 
 BALL STRIKING:
@@ -232,9 +261,12 @@ def performance_summary(rounds: list[dict], whs_index=None, from_date: str = Non
     period_str = f"{from_date} to {to_date}" if from_date and to_date else "all available"
     freq       = _frequency_summary(sorted_rounds)
 
+    location = _location_context(sorted_rounds[-1]) if sorted_rounds else ""
+
     return f"""You are an experienced golf coach. Analyse these {n} rounds ({period_str}) and provide a performance review.
 
 PLAYER: WHS Handicap Index {hcp_str}
+{f"LOCATION CONTEXT: {location}" if location else ""}
 
 PLAYING FREQUENCY:
 {freq}
