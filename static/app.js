@@ -588,6 +588,7 @@ async function loadRounds() {
             <span class="round-date">${fmtDate(r.date)}</span>
             <span class="round-holes">${r.holes || "?"}H</span>
             ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
+            ${r.scoring_mode && r.scoring_mode !== "stroke_play" ? `<span class="format-badge" title="Stableford round — included in handicap trend as an approximation">${r.scoring_mode.charAt(0).toUpperCase() + r.scoring_mode.slice(1)}</span>` : ""}
             ${r.handicap_excluded || (r.holes !== 9 && r.holes !== 18) ? `<span class="hcp-excluded-badge" title="${r.holes !== 9 && r.holes !== 18 ? `Non-standard (${r.holes}H)` : "Manually excluded"}">WHS excl.</span>` : ""}
             ${r.putts_unreliable ? `<span class="putts-unreliable-badge" title="Hole19 did not record putt data for several holes">⚠ putts</span>` : ""}
           </div>

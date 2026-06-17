@@ -1152,6 +1152,17 @@ h3 {
   cursor: help;
 }
 
+.format-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--navy-light) 15%, transparent);
+  color: var(--navy-light);
+  border: 1px solid var(--navy-light);
+  border-radius: 4px;
+  padding: 1px 5px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
 .hcp-excluded-badge {
   font-size: 10px;
   font-weight: 700;
