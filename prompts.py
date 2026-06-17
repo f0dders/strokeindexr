@@ -31,6 +31,53 @@ def _location_context(r: dict) -> str:
         return ""
 
 
+def _hole_breakdown(r: dict) -> str:
+    """Build a compact per-hole table for the AI from holes_json."""
+    try:
+        holes = _json.loads(r.get("holes_json") or "[]")
+        if not holes:
+            return "Not available."
+        lines = ["Hole | Par | SI | Strokes | vsPar | Putts | Penalties | Sand | FIR | GIR | Notes"]
+        lines.append("-----|-----|----|---------|-------|-------|-----------|------|-----|-----|------")
+        for h in holes:
+            hs  = h.get("hole_score", {})
+            ht  = h.get("hole_tee", {})
+            num = h.get("sequence", "?")
+            par = ht.get("par", "?")
+            si  = ht.get("stroke_index", "?")
+            strokes   = hs.get("total_of_strokes", "?")
+            putts     = hs.get("total_of_putts", "?")
+            penalties = hs.get("total_of_penalties") or 0
+            sand      = hs.get("total_of_sand_shots") or 0
+            scratched = hs.get("scratched", False)
+            gir       = hs.get("green_in_regulation")
+            fir_raw   = hs.get("fairway_hit")
+
+            vs_par = (strokes - par) if isinstance(strokes, int) and isinstance(par, int) else "?"
+            vs_par_str = f"+{vs_par}" if isinstance(vs_par, int) and vs_par > 0 else str(vs_par)
+
+            fir_str = {"center": "✓", "target": "✓", "left": "L", "right": "R"}.get(fir_raw, "—")
+            gir_str = "✓" if gir else ("—" if gir is None else "✗")
+
+            notes = []
+            if scratched:
+                notes.append("pickup")
+            if penalties >= 2:
+                notes.append(f"{penalties}pen (likely S&D)")
+            elif penalties == 1:
+                notes.append("1pen")
+            if sand:
+                notes.append(f"{sand} bunker")
+
+            lines.append(
+                f"  {num:>2} |  {par}  | {si:>2} |    {strokes}    |  {vs_par_str:>4} |"
+                f"   {putts}   |     {penalties}     |  {sand}   |  {fir_str}  |  {gir_str}  | {', '.join(notes)}"
+            )
+        return "\n".join(lines)
+    except Exception:
+        return "Not available."
+
+
 def _weather_str(r: dict) -> str:
     parts = []
     if r.get("weather_temp_c") is not None:
@@ -243,12 +290,16 @@ SCORE BREAKDOWN:
 
 Total Putts: {'(not tracked — Hole19 did not record putt data for this round)' if r.get('putts_unreliable') else r.get('putts', '?')}
 
+HOLE-BY-HOLE BREAKDOWN:
+Note: penalties ≥ 2 on a hole likely indicate a stroke-and-distance situation (tee shot OOB or lost ball — player re-teed). Treat these as significant tee accuracy issues, not minor infractions.
+{_hole_breakdown(r)}
+
 Notes from player: {r.get('notes') or 'None'}
 
 Please provide:
 1. **Round Summary** — a brief narrative of how this round went, factoring in conditions and time of day where relevant
 2. **Strengths** — what went well today
-3. **Areas for Improvement** — the 2-3 most impactful things to work on
+3. **Areas for Improvement** — the 2-3 most impactful things to work on, referencing specific holes where relevant
 4. **Key Stat** — one number that tells the story of this round
 5. **Practice Focus** — a specific drill or practice recommendation
 
