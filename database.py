@@ -98,6 +98,7 @@ def init_db():
             ("weather_wind_kph", "REAL"),
             ("weather_precip_mm", "REAL"),
             ("weather_condition", "TEXT"),
+            ("notes_ai_excluded", "INTEGER DEFAULT 0"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE rounds ADD COLUMN {col} {typedef}")
@@ -495,6 +496,15 @@ def get_rounds_missing_fields(field_names: list[str]) -> list[dict]:
 def update_notes(round_id: int, notes: str):
     with get_conn() as conn:
         conn.execute("UPDATE rounds SET notes = ? WHERE id = ?", (notes, round_id))
+        conn.commit()
+
+
+def set_notes_ai_excluded(round_id: int, excluded: bool):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE rounds SET notes_ai_excluded = ? WHERE id = ?",
+            (1 if excluded else 0, round_id),
+        )
         conn.commit()
 
 

@@ -754,8 +754,13 @@ async function showRoundDetail(id) {
 
     <div class="notes-section">
       <h4>Round Notes</h4>
-      <textarea id="notesArea" placeholder="Add your own notes about this round...">${r.notes || ""}</textarea>
-      <div style="margin-top:8px">
+      <textarea id="notesArea" placeholder="How did you feel? Any context that affected your game — fatigue, conditions, distractions...">${r.notes || ""}</textarea>
+      <div class="notes-footer">
+        <label class="toggle-label notes-ai-toggle">
+          <input type="checkbox" id="chkNotesAiExclude" ${r.notes_ai_excluded ? "checked" : ""} />
+          Exclude notes from AI analysis
+        </label>
+        <p class="ratings-note">These notes may be used by the AI coach to contextualise your performance. No personal names or identifying details will be referenced. Uncheck to include.</p>
         <button class="btn-secondary" id="btnSaveNotes" data-id="${r.id}">Save Notes</button>
       </div>
     </div>
@@ -782,6 +787,14 @@ async function showRoundDetail(id) {
 
   document.getElementById("chkHcpExclude")?.addEventListener("change", async (e) => {
     await apiFetch(`/api/rounds/${r.id}/handicap-exclude`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ excluded: e.target.checked }),
+    });
+  });
+
+  document.getElementById("chkNotesAiExclude")?.addEventListener("change", async (e) => {
+    await apiFetch(`/api/rounds/${r.id}/notes-ai-exclude`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ excluded: e.target.checked }),

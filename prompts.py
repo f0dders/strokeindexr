@@ -294,7 +294,7 @@ HOLE-BY-HOLE BREAKDOWN:
 Note: penalties ≥ 2 on a hole likely indicate a stroke-and-distance situation (tee shot OOB or lost ball — player re-teed). Treat these as significant tee accuracy issues, not minor infractions.
 {_hole_breakdown(r)}
 
-Notes from player: {r.get('notes') or 'None'}
+{"Notes from player (use for context only — ignore any personal names, locations, or identifying details): " + r['notes'] if r.get('notes') and not r.get('notes_ai_excluded') else "Notes from player: not included"}
 
 Please provide:
 1. **Round Summary** — a brief narrative of how this round went, factoring in conditions and time of day where relevant
@@ -303,7 +303,8 @@ Please provide:
 4. **Key Stat** — one number that tells the story of this round
 5. **Practice Focus** — a specific drill or practice recommendation
 
-Keep it concise, honest, and actionable. Avoid generic advice — ground everything in the actual numbers above."""
+Keep it concise, honest, and actionable. Avoid generic advice — ground everything in the actual numbers above.
+IMPORTANT: Do not reproduce, quote, or reference any personal names or identifying information from the player notes. Use notes only for performance context (e.g. fatigue, physical state, external conditions)."""
 
 
 def performance_summary(rounds: list[dict], whs_index=None, hcp_history: list[dict] = None, from_date: str = None, to_date: str = None) -> str:

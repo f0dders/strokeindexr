@@ -437,6 +437,8 @@ h3 {
   font-family: inherit;
 }
 .notes-section textarea:focus { outline: none; border-color: var(--green-light); }
+.notes-footer { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.notes-ai-toggle { font-size: 13px; color: var(--text-muted); }
 
 .round-action-bar {
   display: flex;

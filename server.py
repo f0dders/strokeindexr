@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, Response, send_from_directory
 from database import (
     init_db, insert_round, replace_round, find_duplicate,
     get_rounds, get_round, delete_round,
-    update_notes, save_debrief, save_short_summary, set_handicap_excluded,
+    update_notes, save_debrief, save_short_summary, set_handicap_excluded, set_notes_ai_excluded,
     get_global_summary, save_global_summary,
     get_latest_round_date, get_rounds_in_window,
     get_stats_summary, get_trend_data,
@@ -466,6 +466,13 @@ def api_ai_course_description(course_id):
 def api_handicap_exclude(round_id):
     excluded = (request.json or {}).get("excluded", False)
     set_handicap_excluded(round_id, excluded)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/rounds/<int:round_id>/notes-ai-exclude", methods=["POST"])
+def api_notes_ai_exclude(round_id):
+    excluded = (request.json or {}).get("excluded", False)
+    set_notes_ai_excluded(round_id, excluded)
     return jsonify({"ok": True})
 
 
