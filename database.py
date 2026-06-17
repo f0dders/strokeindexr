@@ -4,13 +4,33 @@ import json
 import re
 import sqlite3
 import os
+import shutil
+from pathlib import Path
+from platformdirs import user_data_dir
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "golf.db")
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "data", "config.json")
+# Standard per-OS data directory: ~/Library/Application Support/strokeindexr (Mac),
+# %APPDATA%\strokeindexr (Windows), ~/.local/share/strokeindexr (Linux)
+_APP_DIR   = Path(user_data_dir("strokeindexr", "f0dders"))
+_LEGACY_DIR = Path(__file__).parent / "data"
+
+def _migrate_if_needed():
+    """Move data/ from alongside the app to the OS data directory on first run."""
+    if _APP_DIR.exists():
+        return
+    if _legacy_db := _LEGACY_DIR / "golf.db":
+        if _legacy_db.exists():
+            _APP_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(_LEGACY_DIR, _APP_DIR, dirs_exist_ok=True)
+            return
+    _APP_DIR.mkdir(parents=True, exist_ok=True)
+
+_migrate_if_needed()
+
+DB_PATH     = str(_APP_DIR / "golf.db")
+CONFIG_PATH = str(_APP_DIR / "config.json")
 
 
 def get_conn():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
