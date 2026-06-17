@@ -167,10 +167,12 @@ def api_get_courses():
     import json as _json
 
     def annotate(c):
-        rounds = get_rounds_for_course(c["name"])
-        # Include children's rounds in parent stats
+        own_rounds = get_rounds_for_course(c["name"])
+        child_rounds = []
         for child in c.get("children", []):
-            rounds += get_rounds_for_course(child["name"])
+            child_rounds += get_rounds_for_course(child["name"])
+        rounds = own_rounds + child_rounds
+        c["has_own_rounds"] = len(own_rounds) > 0
         scores_vs_par = [r["score_vs_par"] for r in rounds if r.get("score_vs_par") is not None]
         c["times_played"]  = len(rounds)
         c["best_vs_par"]   = min(scores_vs_par) if scores_vs_par else None

@@ -1141,22 +1141,67 @@ document.getElementById("btnImportEmail").addEventListener("click", () => {
 });
 
 // ── Courses ───────────────────────────────────────────────────────────────────
-function courseCardHTML(c, isChild = false) {
+function courseCardHTML(c) {
+  const children   = c.children || [];
+  const hasChildren = children.length > 0;
+  const ownOnly    = c.has_own_rounds || !hasChildren;
+  const qualifier  = !ownOnly ? " · 9H" : "";
+
   const ratingBadges = TEE_COLOURS.filter(t => c[t.toLowerCase()+"_cr_18"]).map(t =>
-    `<span class="cr-badge">${teeBadge(t)} CR ${c[t.toLowerCase()+"_cr_18"]} / ${c[t.toLowerCase()+"_slope_18"] ?? "—"}</span>`
-  ).join("") || (!isChild ? `<span class="cr-missing">No ratings set</span>` : "");
+    `<span class="cc-rating-badge">${teeBadge(t)} <span>CR ${c[t.toLowerCase()+"_cr_18"]} / ${c[t.toLowerCase()+"_slope_18"] ?? "—"}</span></span>`
+  ).join("");
+
+  const fmtVsPar = v => v == null ? null : (v > 0 ? "+" : "") + v;
+  const statVal  = v => v == null
+    ? `<span class="cc-stat-val cc-stat-empty">—</span>`
+    : `<span class="cc-stat-val">${v}</span>`;
+
+  const stats = `
+    <div class="cc-stats">
+      <div class="cc-stat">
+        <span class="cc-stat-label">Best${qualifier}</span>
+        ${statVal(fmtVsPar(c.best_vs_par))}
+      </div>
+      <div class="cc-stat">
+        <span class="cc-stat-label">Avg${qualifier}</span>
+        ${statVal(fmtVsPar(c.avg_vs_par))}
+      </div>
+      <div class="cc-stat">
+        <span class="cc-stat-label">Avg putts</span>
+        ${statVal(c.avg_putts)}
+      </div>
+      <div class="cc-stat">
+        <span class="cc-stat-label">GIR</span>
+        ${statVal(c.avg_gir != null ? c.avg_gir + "%" : null)}
+      </div>
+    </div>`;
+
+  const childRows = hasChildren ? `
+    <div class="cc-children">
+      ${children.map(ch => {
+        const fmtVsP = v => v == null ? "" : ` · ${v > 0 ? "+" : ""}${v} avg`;
+        return `<div class="cc-child-row" data-id="${ch.id}">
+          <span class="cc-child-name">${ch.name}</span>
+          <span class="cc-child-meta">${ch.times_played ?? 0} round${(ch.times_played ?? 0) !== 1 ? "s" : ""}${fmtVsP(ch.avg_vs_par)}</span>
+          <span class="cc-child-arrow">›</span>
+        </div>`;
+      }).join("")}
+    </div>` : "";
+
+  const footer = ratingBadges
+    ? `<div class="cc-footer">${ratingBadges}</div>`
+    : `<div class="cc-footer cc-footer-empty">No tee ratings set</div>`;
 
   return `
-    <div class="course-card${isChild ? " course-card-child" : ""}" data-id="${c.id}">
-      <div class="course-card-name">${c.name}</div>
-      <div class="course-card-stats">
-        <span>${c.times_played} round${c.times_played !== 1 ? "s" : ""}</span>
-        ${c.best_vs_par != null ? `<span>Best: ${c.best_vs_par > 0 ? "+" : ""}${c.best_vs_par}</span>` : ""}
-        ${c.avg_vs_par  != null ? `<span>Avg: ${c.avg_vs_par > 0 ? "+" : ""}${c.avg_vs_par}</span>` : ""}
-        ${c.avg_putts   != null ? `<span>Avg Putts: ${c.avg_putts}</span>` : ""}
-        ${c.avg_gir     != null ? `<span>GIR: ${c.avg_gir}%</span>` : ""}
-        ${c.avg_fir     != null ? `<span>FIR: ${c.avg_fir}%</span>` : ""}
-        ${ratingBadges}
+    <div class="course-card" data-id="${c.id}">
+      <div class="cc-header">
+        <div class="cc-name">${c.name}</div>
+        <span class="cc-rounds-pill">${c.times_played} round${c.times_played !== 1 ? "s" : ""}</span>
+      </div>
+      <div class="cc-body">
+        ${stats}
+        ${footer}
+        ${childRows}
       </div>
     </div>
   `;
@@ -1192,16 +1237,16 @@ async function loadCourses() {
     `).join("");
   }
 
-  el.innerHTML = suggestHTML + courses.map(c => {
-    const children = c.children || [];
-    const childHTML = children.length
-      ? `<div class="course-children">${children.map(ch => courseCardHTML(ch, true)).join("")}</div>`
-      : "";
-    return courseCardHTML(c) + childHTML;
-  }).join("");
+  el.innerHTML = suggestHTML + courses.map(c => courseCardHTML(c)).join("");
 
   el.querySelectorAll(".course-card").forEach(card => {
     card.addEventListener("click", () => showCourseDetail(+card.dataset.id));
+  });
+  el.querySelectorAll(".cc-child-row").forEach(row => {
+    row.addEventListener("click", e => {
+      e.stopPropagation();
+      showCourseDetail(+row.dataset.id);
+    });
   });
 
   // Suggestion confirm
