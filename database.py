@@ -471,6 +471,27 @@ def delete_round(round_id: int):
         conn.commit()
 
 
+def patch_round_fields(round_id: int, fields: dict):
+    """Update specific fields on a round without touching anything else."""
+    if not fields:
+        return
+    sets = ", ".join(f"{k} = ?" for k in fields)
+    with get_conn() as conn:
+        conn.execute(f"UPDATE rounds SET {sets} WHERE id = ?", [*fields.values(), round_id])
+        conn.commit()
+
+
+def get_rounds_missing_fields(field_names: list[str]) -> list[dict]:
+    """Return rounds that have a hole19_url but are missing any of the given fields."""
+    conditions = " OR ".join(f"{f} IS NULL" for f in field_names)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT id, hole19_url, holes_json, date, tee_time FROM rounds "
+            f"WHERE hole19_url IS NOT NULL AND ({conditions})"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def update_notes(round_id: int, notes: str):
     with get_conn() as conn:
         conn.execute("UPDATE rounds SET notes = ? WHERE id = ?", (notes, round_id))

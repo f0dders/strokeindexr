@@ -14,6 +14,7 @@ from database import (
     get_courses_with_hierarchy, get_suggested_links,
     link_courses, unlink_course,
     load_config, save_config,
+    patch_round_fields, get_rounds_missing_fields,
 )
 from whs import current_index, index_history
 from scraper import scrape_round
@@ -29,6 +30,54 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 _update_cache = {"latest": None, "checked_at": 0}
 _UPDATE_TTL = 6 * 3600  # 6 hours
 _GITHUB_RELEASES = "https://api.github.com/repos/f0dders/strokeindexr/releases/latest"
+
+def _backfill_missing_fields():
+    """Silently fill in weather/tee_time for existing rounds that predate those features."""
+    from scraper import _fetch_weather
+    import json as _json
+    FIELDS = ["weather_temp_c", "tee_time"]
+    rounds = get_rounds_missing_fields(FIELDS)
+    if not rounds:
+        return
+    print(f"  Backfilling {len(rounds)} round(s) with missing weather/tee-time data...")
+    for r in rounds:
+        try:
+            updates = {}
+            holes = _json.loads(r.get("holes_json") or "[]")
+            # Tee time
+            if not r.get("tee_time"):
+                from scraper import HEADERS as _H
+                import requests as _rq
+                from bs4 import BeautifulSoup as _BS
+                from datetime import datetime as _dt
+                resp = _rq.get(r["hole19_url"], headers=_H, timeout=15)
+                soup = _BS(resp.text, "html.parser")
+                for script in soup.find_all("script", {"type": "application/json"}):
+                    if script.get("data-component-name") == "MyScorecard":
+                        played = _json.loads(script.string).get("data", {}).get("played_date", "")
+                        if played:
+                            dt = _dt.fromisoformat(played.replace("Z", "+00:00"))
+                            updates["tee_time"] = dt.astimezone().strftime("%H:%M")
+                        break
+
+            # Weather
+            if not r.get("weather_temp_c") and holes:
+                h1 = holes[0]
+                lat = h1.get("tee_latitude")
+                lon = h1.get("tee_longitude")
+                date = r.get("date")
+                tee_time = updates.get("tee_time") or r.get("tee_time") or "08:00"
+                hour = int(tee_time.split(":")[0])
+                if lat and lon and date:
+                    weather = _fetch_weather(lat, lon, date, hour)
+                    updates.update(weather)
+
+            if updates:
+                patch_round_fields(r["id"], updates)
+        except Exception:
+            pass
+    print("  Backfill complete.")
+
 
 def _fetch_latest_version():
     try:
