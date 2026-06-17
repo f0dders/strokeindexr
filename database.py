@@ -72,6 +72,7 @@ def init_db():
             ("ai_short_summary", "TEXT"),
             ("tee_colour", "TEXT"),
             ("handicap_excluded", "INTEGER DEFAULT 0"),
+            ("scoring_mode", "TEXT DEFAULT 'stroke_play'"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE rounds ADD COLUMN {col} {typedef}")

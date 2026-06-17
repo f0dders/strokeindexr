@@ -23,6 +23,7 @@ def _parse_scorecard(data: dict) -> dict:
     out = {}
     out["course"] = data.get("course_name")
     out["playing_hcp"] = data.get("playing_hcp")
+    out["scoring_mode"] = data.get("scoring_mode", "stroke_play")
 
     # Use actual scorecard hole count — holes_number from Hole19 metadata can
     # report 18 even when only 9 holes were tracked (e.g. a 9-hole course).

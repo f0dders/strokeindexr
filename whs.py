@@ -60,6 +60,9 @@ def _exclusion_reason(r: dict) -> str | None:
     holes = r.get("holes") or 0
     if holes not in VALID_HOLES:
         return f"Non-standard hole count ({holes}H — only 9H and 18H are WHS-eligible)"
+    mode = (r.get("scoring_mode") or "stroke_play").lower()
+    if mode != "stroke_play":
+        return f"Non-stroke-play format ({mode} rounds are not WHS-eligible)"
     return None
 
 
