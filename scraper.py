@@ -4,6 +4,7 @@ import json
 import re
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime, timezone
 
 HEADERS = {
     "User-Agent": (
@@ -37,6 +38,11 @@ def _parse_scorecard(data: dict) -> dict:
     played = data.get("played_date", "")
     if played:
         out["date"] = played[:10]  # yyyy-mm-dd
+        try:
+            dt = datetime.fromisoformat(played.replace("Z", "+00:00"))
+            out["tee_time"] = dt.astimezone().strftime("%H:%M")
+        except Exception:
+            pass
 
     holes = data.get("holes", [])
     if holes:
@@ -147,6 +153,59 @@ def _parse_stats(text: str) -> dict:
     return out
 
 
+def _fetch_weather(lat: float, lon: float, date: str, hour: int) -> dict:
+    """Fetch historical weather from Open-Meteo for a given location, date and hour."""
+    try:
+        r = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude": lat, "longitude": lon,
+                "start_date": date, "end_date": date,
+                "hourly": "temperature_2m,windspeed_10m,precipitation,weathercode",
+                "timezone": "auto",
+            },
+            timeout=8,
+        )
+        if not r.ok:
+            return {}
+        j = r.json()
+        hourly = j.get("hourly", {})
+        temps  = hourly.get("temperature_2m", [])
+        winds  = hourly.get("windspeed_10m", [])
+        precip = hourly.get("precipitation", [])
+        codes  = hourly.get("weathercode", [])
+        if hour >= len(temps):
+            return {}
+        wcode = codes[hour] if hour < len(codes) else None
+        # WMO weather code → human label
+        if wcode is None:
+            condition = None
+        elif wcode == 0:
+            condition = "Clear"
+        elif wcode <= 3:
+            condition = "Partly cloudy"
+        elif wcode <= 49:
+            condition = "Fog/mist"
+        elif wcode <= 59:
+            condition = "Drizzle"
+        elif wcode <= 69:
+            condition = "Rain"
+        elif wcode <= 79:
+            condition = "Snow"
+        elif wcode <= 82:
+            condition = "Showers"
+        else:
+            condition = "Thunderstorm"
+        return {
+            "weather_temp_c":    round(temps[hour], 1) if hour < len(temps) else None,
+            "weather_wind_kph":  round(winds[hour], 1) if hour < len(winds) else None,
+            "weather_precip_mm": round(precip[hour], 1) if hour < len(precip) else None,
+            "weather_condition": condition,
+        }
+    except Exception:
+        return {}
+
+
 def scrape_round(url: str) -> dict:
     """Fetch a Hole19 round page and return a dict ready for DB insertion."""
     resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -218,5 +277,20 @@ def scrape_round(url: str) -> dict:
     dur_m = re.search(r"(\d+\s*h(?:ours?)?\s*\d*\s*m(?:in(?:utes?)?)?)", full_text, re.I)
     if dur_m:
         data.setdefault("duration", dur_m.group(1).strip())
+
+    # Weather — fetch from Open-Meteo using hole 1 coords and tee time
+    try:
+        holes_json = json.loads(data.get("holes_json") or "[]")
+        if holes_json:
+            h1 = holes_json[0]
+            lat = h1.get("tee_latitude")
+            lon = h1.get("tee_longitude")
+            tee_time = data.get("tee_time", "08:00")
+            hour = int(tee_time.split(":")[0])
+            if lat and lon and data.get("date"):
+                weather = _fetch_weather(lat, lon, data["date"], hour)
+                data.update(weather)
+    except Exception:
+        pass
 
     return data

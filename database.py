@@ -93,6 +93,11 @@ def init_db():
             ("tee_colour", "TEXT"),
             ("handicap_excluded", "INTEGER DEFAULT 0"),
             ("scoring_mode", "TEXT DEFAULT 'stroke_play'"),
+            ("tee_time", "TEXT"),
+            ("weather_temp_c", "REAL"),
+            ("weather_wind_kph", "REAL"),
+            ("weather_precip_mm", "REAL"),
+            ("weather_condition", "TEXT"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE rounds ADD COLUMN {col} {typedef}")
@@ -443,6 +448,7 @@ def get_rounds(limit: int = 100, offset: int = 0) -> list[dict]:
             f"""SELECT id, date, course, holes, score, score_vs_par, par, putts,
                       handicap, tee_colour, handicap_excluded, ai_short_summary,
                       holes_json, gir_hit_pct, fairway_hit_pct, scoring_mode,
+                      tee_time, weather_temp_c, weather_wind_kph, weather_precip_mm, weather_condition,
                       {PUTTS_UNRELIABLE_EXPR} as putts_unreliable
                FROM rounds ORDER BY date DESC, imported_at DESC LIMIT ? OFFSET ?""",
             (limit, offset),
