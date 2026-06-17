@@ -18,8 +18,43 @@ from database import (
 from whs import current_index, index_history
 from scraper import scrape_round
 import prompts
+import requests as _requests
+import threading
+import time
+from version import __version__
 
 app = Flask(__name__, static_folder="static", static_url_path="")
+
+# ── Update check (cached) ─────────────────────────────────────────────────────
+_update_cache = {"latest": None, "checked_at": 0}
+_UPDATE_TTL = 6 * 3600  # 6 hours
+_GITHUB_RELEASES = "https://api.github.com/repos/f0dders/strokeindexr/releases/latest"
+
+def _fetch_latest_version():
+    try:
+        r = _requests.get(_GITHUB_RELEASES, timeout=5,
+                          headers={"Accept": "application/vnd.github+json"})
+        if r.ok:
+            _update_cache["latest"] = r.json().get("tag_name")
+    except Exception:
+        pass
+    _update_cache["checked_at"] = time.time()
+
+def _maybe_refresh():
+    if time.time() - _update_cache["checked_at"] > _UPDATE_TTL:
+        threading.Thread(target=_fetch_latest_version, daemon=True).start()
+
+@app.route("/api/version", methods=["GET"])
+def api_version():
+    _maybe_refresh()
+    latest = _update_cache["latest"]
+    update_available = bool(latest and latest != __version__)
+    return jsonify({
+        "local": __version__,
+        "latest": latest,
+        "update_available": update_available,
+        "release_url": "https://github.com/f0dders/strokeindexr/releases/latest",
+    })
 
 
 # ── Static files ──────────────────────────────────────────────────────────────

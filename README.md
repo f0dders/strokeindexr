@@ -127,6 +127,28 @@ You can browse all available models and their pricing at [openrouter.ai/models](
 
 ---
 
+## Updating StrokeIndexr
+
+When a new version is available, a small notification will appear in the bottom-left of the sidebar. Your data is never affected by an update.
+
+### If you downloaded a ZIP
+
+1. Download the latest ZIP from the [Releases page](https://github.com/f0dders/strokeindexr/releases/latest)
+2. Unzip it to a **new folder**
+3. Copy your **`data/`** folder from the old folder into the new one
+4. Start the app from the new folder as normal
+
+### If you cloned the repo with Git
+
+Double-click the appropriate update script:
+- **Mac:** `Update - Mac.command`
+- **Windows:** `Update - Windows.bat`
+- **Linux:** `bash "Update - Linux.sh"`
+
+Then restart the app.
+
+---
+
 ## Stopping the App
 
 Close the terminal window (Mac/Linux) or command prompt window (Windows) that opened when you started the app.

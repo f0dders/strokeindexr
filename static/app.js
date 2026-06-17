@@ -1979,3 +1979,20 @@ document.getElementById("btnSaveSettings").addEventListener("click", async () =>
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadDashboard();
+
+// ── Version / update check ────────────────────────────────────────────────────
+(async () => {
+  try {
+    const v = await apiFetch("/api/version").then(r => r.json());
+    const label = document.getElementById("versionLabel");
+    if (label) label.textContent = v.local;
+    if (v.update_available) {
+      const banner = document.getElementById("updateBanner");
+      const link   = document.getElementById("updateBannerLink");
+      if (banner && link) {
+        link.href = v.release_url;
+        banner.style.display = "flex";
+      }
+    }
+  } catch { /* no network, silently skip */ }
+})();
