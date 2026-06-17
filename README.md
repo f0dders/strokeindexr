@@ -29,7 +29,7 @@
 ## What You'll Need
 
 - A Mac, Windows PC, or Linux machine
-- [Python 3.10 or later](https://www.python.org/downloads/) installed
+- Python 3.10 or later (see install steps below)
 - A [Hole19](https://hole19golf.com) account with some rounds tracked
 - *(Optional)* An API key from an AI provider if you want coaching summaries
 
@@ -37,13 +37,37 @@
 
 ## Getting Started
 
-### 1. Download
+### 1. Install Python *(first time only)*
+
+StrokeIndexr needs Python 3.10 or later. If you're not sure whether you have it, the start script will tell you.
+
+**Mac:**
+1. Go to [python.org/downloads](https://www.python.org/downloads/)
+2. Click **Download Python** and run the installer
+3. Follow the installer — no custom settings needed
+
+**Windows:**
+1. Go to [python.org/downloads](https://www.python.org/downloads/)
+2. Click **Download Python** and run the installer
+3. **Important:** tick **"Add Python to PATH"** on the first screen before clicking Install
+
+**Linux:**
+```bash
+# Ubuntu/Debian
+sudo apt install python3 python3-pip python3-venv
+
+# Fedora
+sudo dnf install python3
+
+# Arch
+sudo pacman -S python
+```
+
+### 2. Download StrokeIndexr
 
 Click the green **Code** button → **Download ZIP**, then unzip it somewhere on your computer.
 
-### 2. First-time setup
-
-You only need to do this once.
+### 3. Start the app
 
 **Mac:**
 1. Double-click **`Start - Mac.command`**
@@ -57,13 +81,15 @@ You only need to do this once.
 bash "Start - Linux.sh"
 ```
 
-The first run will install all required packages automatically. This may take a minute or two.
+The first run will install all required Python packages automatically. This may take a minute or two — you only need to wait once.
 
-### 3. Open the app
+If Python isn't installed or is too old, the start script will tell you exactly what to do.
+
+### 4. Open the app
 
 Your browser should open automatically to **http://127.0.0.1:5050**
 
-If it doesn't, just open your browser and go to that address manually.
+If it doesn't, open your browser and go to that address manually.
 
 ---
 
