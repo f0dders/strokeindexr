@@ -86,7 +86,18 @@ StrokeIndexr works great without AI, but if you'd like coaching summaries:
 
 Supported providers: Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google), Groq, Mistral, OpenRouter, Ollama (local), LM Studio (local).
 
-If you want a free option, [Groq](https://groq.com) offers a generous free tier that works well for golf analysis.
+### Getting a free API key with OpenRouter
+
+[OpenRouter](https://openrouter.ai) is the easiest way to get started for free — it gives you access to a range of AI models through a single API key, including several with no cost.
+
+1. Go to [openrouter.ai](https://openrouter.ai) and create a free account
+2. Go to **Keys** and click **Create Key** — copy the key it generates
+3. In StrokeIndexr Settings, set the provider to **OpenRouter** and paste your key
+4. Leave the model field blank to use the default, or enter a free model name such as `mistralai/mistral-7b-instruct` or `meta-llama/llama-3-8b-instruct`
+
+You can browse all available models and their pricing at [openrouter.ai/models](https://openrouter.ai/models) — filter by "Free" to see options that cost nothing.
+
+> **Note:** Free models on OpenRouter are capable but less powerful than paid options like Claude or GPT-4. For most golf analysis use cases they work well.
 
 ---
 
