@@ -1964,6 +1964,8 @@ document.getElementById("btnSettings").addEventListener("click", async () => {
     document.getElementById("aiApiKey").value   = cfg.api_key  || "";
     document.getElementById("aiModel").value    = cfg.model    || "";
     document.getElementById("aiBaseUrl").value  = cfg.base_url || "";
+    // notes_ai_default: true = include (default), false = exclude
+    document.getElementById("notesAiDefault").checked = cfg.notes_ai_default !== false;
   } catch (_) {}
   updateSettingsFields();
 
@@ -2021,10 +2023,11 @@ document.getElementById("btnSaveSettings").addEventListener("click", async () =>
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        provider: document.getElementById("aiProvider").value,
-        api_key:  document.getElementById("aiApiKey").value,
-        model:    document.getElementById("aiModel").value,
-        base_url: document.getElementById("aiBaseUrl").value,
+        provider:         document.getElementById("aiProvider").value,
+        api_key:          document.getElementById("aiApiKey").value,
+        model:            document.getElementById("aiModel").value,
+        base_url:         document.getElementById("aiBaseUrl").value,
+        notes_ai_default: document.getElementById("notesAiDefault").checked,
       }),
     });
     localStorage.setItem("hcpMode", document.getElementById("hcpMode").value);

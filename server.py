@@ -152,6 +152,10 @@ def api_import():
         return jsonify({"error": "URL must be a Hole19 round URL"}), 400
     try:
         data = scrape_round(url)
+        # Apply global notes AI default — excluded=True when default is False
+        cfg = load_config()
+        if not overwrite:
+            data["notes_ai_excluded"] = 0 if cfg.get("notes_ai_default", True) else 1
         existing = find_duplicate(data)
         if existing and not overwrite:
             return jsonify({"duplicate": True, "existing": {
@@ -541,9 +545,11 @@ def api_save_config():
         cfg["api_key"] = new_key
     elif is_test and has_real_key:
         pass  # never overwrite a real key with a test value
-    cfg["provider"] = incoming.get("provider", cfg.get("provider", "claude"))
-    cfg["model"]    = incoming.get("model",    cfg.get("model", ""))
-    cfg["base_url"] = incoming.get("base_url", cfg.get("base_url", ""))
+    cfg["provider"]         = incoming.get("provider", cfg.get("provider", "claude"))
+    cfg["model"]            = incoming.get("model",    cfg.get("model", ""))
+    cfg["base_url"]         = incoming.get("base_url", cfg.get("base_url", ""))
+    if "notes_ai_default" in incoming:
+        cfg["notes_ai_default"] = bool(incoming["notes_ai_default"])
     save_config(cfg)
     return jsonify({"ok": True})
 
