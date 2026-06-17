@@ -49,7 +49,7 @@ if not exist venv (
 )
 
 call venv\Scripts\activate
-pip install -q -r requirements.txt
+pip install -q --disable-pip-version-check -r requirements.txt
 
 echo.
 echo Starting StrokeIndexr...

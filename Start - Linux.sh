@@ -36,7 +36,7 @@ if [ ! -d "venv" ]; then
 fi
 
 source venv/bin/activate
-pip install -q -r requirements.txt
+pip install -q --disable-pip-version-check -r requirements.txt
 
 echo ""
 echo "⛳  Starting StrokeIndexr..."

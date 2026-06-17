@@ -38,7 +38,7 @@ fi
 source venv/bin/activate
 
 # Install/update dependencies
-pip install -q -r requirements.txt
+pip install -q --disable-pip-version-check -r requirements.txt
 
 lsof -ti:5050 | xargs kill -9 2>/dev/null && echo "Stopped existing server on port 5050."
 

@@ -29,7 +29,7 @@ echo ""
 git pull origin main
 
 source venv/bin/activate 2>/dev/null || true
-pip install -q -r requirements.txt
+pip install -q --disable-pip-version-check -r requirements.txt
 
 echo ""
 echo "✓ Update complete. Restart the app to use the new version."
