@@ -389,7 +389,13 @@ function initShotMaps(holesJson) {
 }
 
 // ── TV-style scorecard banner ───────────────────────────────────────────────
-function tvScorecardHTML(holes, totalPar, totalScore, totalVsPLabel, totalVsPClass) {
+function tvScorecardHTML(holesJson) {
+  if (!holesJson) return "";
+  let holes;
+  try { holes = typeof holesJson === "string" ? JSON.parse(holesJson) : holesJson; }
+  catch { return ""; }
+  if (!holes?.length) return "";
+
   const isEighteen = holes.length > 9;
   const front = holes.slice(0, 9);
   const back  = isEighteen ? holes.slice(9) : [];
@@ -398,6 +404,11 @@ function tvScorecardHTML(holes, totalPar, totalScore, totalVsPLabel, totalVsPCla
   const inPar    = sum(back,  h => h.hole_tee.par);
   const outScore = sum(front, h => h.hole_score.total_of_strokes);
   const inScore  = sum(back,  h => h.hole_score.total_of_strokes);
+  const totalPar   = outPar + inPar;
+  const totalScore = outScore + inScore;
+  const totalVsP = totalScore - totalPar;
+  const totalVsPLabel = totalVsP === 0 ? "E" : (totalVsP > 0 ? `+${totalVsP}` : `${totalVsP}`);
+  const totalVsPClass = totalVsP < 0 ? "tv-badge-under" : totalVsP === 0 ? "tv-badge-even" : "tv-badge-over";
 
   function buildRow(rowCls, label, valueFn, outVal, inVal, totalVal, totalCls = "") {
     let cells = "";
@@ -487,12 +498,11 @@ function renderScorecard(holesJson) {
 
   const totalVsP = totalScore - totalPar;
   const totalVsPLabel = totalVsP === 0 ? "E" : (totalVsP > 0 ? `+${totalVsP}` : `${totalVsP}`);
-  const totalVsPClass = totalVsP < 0 ? "tv-badge-under" : totalVsP === 0 ? "tv-badge-even" : "tv-badge-over";
 
   return `
     <div class="scorecard-section">
       <h4>Scorecard</h4>
-      ${tvScorecardHTML(holes, totalPar, totalScore, totalVsPLabel, totalVsPClass)}
+      ${tvScorecardHTML(holesJson)}
       <table class="scorecard-table">
         <thead>
           <tr>
@@ -1384,8 +1394,8 @@ async function showCourseDetail(id) {
         <h3>Personal Best</h3>
         ${bestBlocks.map(b => `
           <div class="cd-best-block">
-            <div class="cd-best-block-label">${bestBlocks.length > 1 ? b.label : ""} <span class="cd-best-meta">${b.round.score_vs_par > 0 ? "+" : ""}${b.round.score_vs_par} vs par · ${fmtDate(b.round.date)}</span></div>
-            <div class="cd-best-strip cd-best-strip-lg">${holeStripHTML(b.round.holes_json)}</div>
+            <div class="cd-best-block-label">${bestBlocks.length > 1 ? b.label + " · " : ""}<span class="cd-best-meta">${fmtDate(b.round.date)}</span></div>
+            ${tvScorecardHTML(b.round.holes_json)}
           </div>
         `).join("")}
         ${hsLegendHTML()}
