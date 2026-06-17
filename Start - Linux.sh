@@ -10,6 +10,6 @@ source venv/bin/activate
 pip install -q -r requirements.txt
 
 echo ""
-echo "⛳  Starting FairwayIQ..."
+echo "⛳  Starting StrokeIndexr..."
 echo ""
 python3 main.py

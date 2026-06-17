@@ -11,7 +11,7 @@ call venv\Scripts\activate
 pip install -q -r requirements.txt
 
 echo.
-echo Starting FairwayIQ...
+echo Starting StrokeIndexr...
 echo.
 python main.py
 pause
