@@ -126,6 +126,6 @@ Python (Flask) · SQLite · HTML/CSS/JavaScript · No frameworks, no cloud, no t
 
 ## Licence
 
-Copyright (C) 2025 f0dders
+Copyright (C) 2026 f0dders
 
 This project is licensed under the [GNU General Public License v3.0](LICENSE). You are free to use, modify and distribute it, but any derivative work must also be open source under the same licence. Commercial use requires separate written permission from the author.
