@@ -74,6 +74,28 @@ def _gap_days(rounds_sorted: list[dict], idx: int) -> str:
         return ""
 
 
+def _hcp_history_str(hcp_history: list[dict], from_date: str = None) -> str:
+    """Summarise handicap index trajectory from history entries."""
+    if not hcp_history:
+        return "No handicap history available."
+    relevant = [h for h in hcp_history if not from_date or h["date"] >= from_date]
+    if not relevant:
+        relevant = hcp_history
+    first = relevant[0]
+    last  = relevant[-1]
+    direction = "improved" if last["index"] < first["index"] else \
+                "worsened"  if last["index"] > first["index"] else "stable"
+    change = round(last["index"] - first["index"], 1)
+    change_str = f"{'+' if change > 0 else ''}{change}"
+    overall_first = hcp_history[0]
+    overall_last  = hcp_history[-1]
+    return (
+        f"Current index: {last['index']} | "
+        f"Over this window: {first['index']} → {last['index']} ({change_str}, {direction}) | "
+        f"All-time: {overall_first['index']} → {overall_last['index']}"
+    )
+
+
 def _frequency_summary(rounds_sorted: list[dict]) -> str:
     if len(rounds_sorted) < 2:
         return "Only one round in window — no frequency data."
@@ -179,7 +201,7 @@ Playing frequency: {freq}
 Return only the 2-3 sentence summary. No headers, no bullet points."""
 
 
-def round_debrief(round_data: dict) -> str:
+def round_debrief(round_data: dict, hcp_history: list[dict] = None) -> str:
     r = round_data
     scoring_note = "" if (r.get("scoring_mode") or "stroke_play") == "stroke_play" else \
         f"\n- Format: Stableford (gross score includes strokes taken on pickup holes)"
@@ -192,6 +214,7 @@ ROUND DATA:
 - Holes: {r.get('holes', 18)}
 - Score: {r.get('score', '?')} ({'+' if (r.get('score_vs_par') or 0) >= 0 else ''}{r.get('score_vs_par', '?')} vs par {r.get('par', '?')})
 - Handicap at time of round: {r.get('handicap', '?')}
+- Handicap trajectory: {_hcp_history_str(hcp_history or [])}
 - Tee time: {_session_str(r.get('tee_time'))}{scoring_note}
 - Distance walked: {f"{r.get('distance_miles')} miles" if r.get('distance_miles') else 'not recorded'}
 
@@ -232,7 +255,7 @@ Please provide:
 Keep it concise, honest, and actionable. Avoid generic advice — ground everything in the actual numbers above."""
 
 
-def performance_summary(rounds: list[dict], whs_index=None, from_date: str = None, to_date: str = None) -> str:
+def performance_summary(rounds: list[dict], whs_index=None, hcp_history: list[dict] = None, from_date: str = None, to_date: str = None) -> str:
     n = len(rounds)
     if n == 0:
         return "No rounds available to analyse."
@@ -263,9 +286,12 @@ def performance_summary(rounds: list[dict], whs_index=None, from_date: str = Non
 
     location = _location_context(sorted_rounds[-1]) if sorted_rounds else ""
 
+    hcp_trajectory = _hcp_history_str(hcp_history or [], from_date=from_date)
+
     return f"""You are an experienced golf coach. Analyse these {n} rounds ({period_str}) and provide a performance review.
 
 PLAYER: WHS Handicap Index {hcp_str}
+HANDICAP TRAJECTORY: {hcp_trajectory}
 {f"LOCATION CONTEXT: {location}" if location else ""}
 
 PLAYING FREQUENCY:
@@ -288,7 +314,7 @@ Please provide:
 Be direct and data-driven. Ground every point in the actual numbers — avoid generic advice."""
 
 
-def practice_plan(rounds: list[dict], whs_index=None, from_date: str = None, to_date: str = None) -> str:
+def practice_plan(rounds: list[dict], whs_index=None, hcp_history: list[dict] = None, from_date: str = None, to_date: str = None) -> str:
     n = len(rounds)
     if n == 0:
         return "No rounds available to analyse."
@@ -305,9 +331,12 @@ def practice_plan(rounds: list[dict], whs_index=None, from_date: str = None, to_
     period_str   = f"{from_date} to {to_date}" if from_date and to_date else "all available"
     freq         = _frequency_summary(sorted_rounds)
 
+    hcp_trajectory = _hcp_history_str(hcp_history or [], from_date=from_date)
+
     return f"""You are a golf coach creating a targeted practice plan based on {n} rounds ({period_str}).
 
 PLAYER: WHS Handicap Index {hcp_str}
+HANDICAP TRAJECTORY: {hcp_trajectory}
 
 PLAYING FREQUENCY:
 {freq}

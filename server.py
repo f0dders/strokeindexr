@@ -593,7 +593,9 @@ def api_ai_round_debrief(round_id):
         return jsonify({"error": "Round not found"}), 404
     try:
         provider = _build_provider()
-        prompt = prompts.round_debrief(r)
+        all_rounds = get_all_rounds_with_course_ratings()
+        hcp_history = index_history(all_rounds)
+        prompt = prompts.round_debrief(r, hcp_history=hcp_history)
         return Response(
             _safe_stream(provider, prompt, on_complete=lambda text: save_debrief(round_id, text)),
             mimetype="text/plain",
@@ -690,10 +692,11 @@ def api_gen_global_summary():
     try:
         provider = _build_provider()
 
-        # Get WHS index for richer prompts
+        # Get WHS index and history for richer prompts
         all_rounds_whs = get_all_rounds_with_course_ratings()
         whs = current_index(all_rounds_whs)
         whs_index = whs.get("index")
+        hcp_history = index_history(all_rounds_whs)
 
         short_text = "".join(provider.stream(
             prompts.global_short_summary(rounds, whs_index=whs_index,
@@ -706,7 +709,7 @@ def api_gen_global_summary():
         def generate():
             yield from _safe_stream(
                 provider,
-                prompt_fn(rounds, whs_index=whs_index, from_date=from_date, to_date=to_date),
+                prompt_fn(rounds, whs_index=whs_index, hcp_history=hcp_history, from_date=from_date, to_date=to_date),
                 on_complete=lambda full: save_global_summary(
                     summary_type, short_text, full,
                     round_count=round_count,
