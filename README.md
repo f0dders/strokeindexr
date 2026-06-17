@@ -18,7 +18,7 @@
 - **Email import** — alternatively, paste the Hole19 round summary email directly into the app to import without a URL.
 - **Per-hole scorecard view** — TV broadcast-style scoring notation (circles for birdies, squares for bogeys) so you can see at a glance how a round went. Pickup holes are shown with a bullet marker.
 - **Weather data** — temperature, wind speed, precipitation and conditions are automatically fetched for each round using the course location and tee time, and displayed on your round history and round detail views.
-- **World Handicap System (WHS) index** — calculated accurately from your last 20 rounds using official WHS rules, including 9-hole round pairing and manual exclusions.
+- **Handicap index** — calculated using the World Handicap System (WHS) formula from your last 20 rounds, including 9-hole round pairing and manual exclusions. This is an unofficial estimate for personal tracking purposes only and is not a recognised WHS handicap.
 - **Course tracker** — stats per course, front/back 9 grouping, and per-tee course rating and slope for accurate handicap calculations.
 - **Tee colour tracking** — records which tees you played (white, yellow, red, blue) and factors this into your WHS differential.
 - **AI coaching summaries** — connect your own AI API key (Claude, ChatGPT, Gemini, and others supported) to get a performance review and practice plan based on your recent rounds. Analysis is location-aware, accounts for weather conditions, playing frequency, rustiness after long gaps, and your full handicap trajectory.
@@ -204,8 +204,8 @@ Back up the `golf.db` file in that folder if you want to keep it safe. You can a
 **A round will not import.**
 > Make sure the round URL is from `hole19golf.com/performance/rounds/`. Private rounds may not be accessible.
 
-**My WHS handicap looks wrong.**
-> WHS requires at least three eligible rounds (exactly 9 or 18 holes). Partially played rounds are automatically excluded. You can also manually exclude a round from within the round detail view.
+**My handicap index looks wrong.**
+> The calculation requires at least three eligible rounds of exactly 9 or 18 holes. Partially played rounds are automatically excluded. You can also manually exclude a round from within the round detail view. Remember this is an unofficial estimate — it uses the WHS formula but is not a registered handicap.
 
 ---
 
