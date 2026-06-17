@@ -8,6 +8,8 @@
   *A personal golf statistics tracker that runs entirely on your own computer.*
 </div>
 
+> **Disclaimer:** StrokeIndexr is an independent, unofficial project and is not affiliated with, endorsed by, or connected to Hole19 Golf or any other third party. It does not access any external API or service without user action. All data is imported by the user from their own personal round history — users retain full ownership of their data.
+
 ---
 
 ## Features
