@@ -617,26 +617,39 @@ h3 {
   border-collapse: collapse;
   font-size: 13px;
   min-width: 540px;
+  border-radius: 8px;
+  overflow: hidden;
 }
 .scorecard-table th {
-  background: var(--green);
-  color: #fff;
-  padding: 7px 10px;
+  background: var(--bg);
+  color: var(--text-muted);
+  padding: 9px 12px;
   text-align: center;
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  border-bottom: 2px solid var(--border);
 }
-.scorecard-table th:first-child { text-align: left; border-radius: 6px 0 0 0; }
-.scorecard-table th:last-child  { border-radius: 0 6px 0 0; }
+.scorecard-table th:first-child { text-align: left; }
 .scorecard-table td {
-  padding: 7px 10px;
+  padding: 9px 12px;
   text-align: center;
-  border-bottom: 1px solid var(--bg);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface);
 }
-.scorecard-table td:first-child { text-align: left; font-weight: 600; color: var(--text-muted); }
-.scorecard-table tr:last-child td { border-bottom: none; font-weight: 700; background: var(--bg); }
-.scorecard-table tr:nth-child(even) td { background: #f9fbf9; }
+.scorecard-table td:first-child { text-align: left; font-weight: 600; color: var(--navy, #1A2D4A); }
+.scorecard-table tr:hover td { background: #f5f8f5; }
+.scorecard-table tr:last-child td {
+  border-bottom: none;
+  font-weight: 700;
+  background: var(--bg);
+  color: var(--text);
+  border-top: 2px solid var(--border);
+}
 .scorecard-table tr:last-child td:first-child { color: var(--text); }
+.scorecard-table .sc-row-pickup td { color: var(--text-muted); }
 
 /* Score colour badges in scorecard */
 /* sc-* replaced by hs-cell system */
