@@ -341,6 +341,7 @@ h3 {
   color: #ef4444;
 }
 .hs-unknown { color: var(--text-muted); }
+.hs-pickup  { color: var(--text-muted); font-size: 16px; line-height: 1; }
 
 .round-date  { font-size: 12px; color: rgba(255,255,255,.6); }
 .round-course { font-weight: 700; font-size: 15px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -594,6 +595,7 @@ h3 {
 .tv-row-score .hs-birdie { border-color: #4ade80; color: #bbf7d0; }
 .tv-row-score .hs-bogey  { border-color: #fb923c; color: #fed7aa; }
 .tv-row-score .hs-double { border-color: #f87171; color: #fecaca; }
+.tv-row-score .hs-pickup { color: rgba(255,255,255,.35); }
 .tv-vs-par-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.15); }
 .tv-vs-par-badge {
   font-size: 16px;

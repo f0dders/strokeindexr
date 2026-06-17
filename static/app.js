@@ -413,8 +413,10 @@ function miniScorecardHTML(holesJson) {
   function cells(group, row) {
     return group.map(h => {
       const s = h.hole_score?.total_of_strokes, p = h.hole_tee?.par, n = h.sequence;
+      const scratched = h.hole_score?.scratched;
       if (row === "hole")  return `<td class="msc-td msc-hole">${n}</td>`;
       if (row === "par")   return `<td class="msc-td msc-par">${p ?? ""}</td>`;
+      if (scratched) return `<td class="msc-td"><span class="hs-cell hs-pickup" title="H${n}: picked up (${s} strokes)">•</span></td>`;
       return `<td class="msc-td"><span class="hs-cell ${hsCls(s, p)}">${s ?? "?"}</span></td>`;
     }).join("");
   }
@@ -475,6 +477,7 @@ function tvScorecardHTML(holesJson) {
   const scoreRow = buildRow("tv-row-score", "Score", h => {
     const strokes = h.hole_score.total_of_strokes;
     const par     = h.hole_tee.par;
+    if (h.hole_score.scratched) return `<span class="hs-cell hs-pickup" title="Picked up (${strokes} strokes)">•</span>`;
     const d = strokes - par;
     const cls = d <= -2 ? "hs-eagle" : d === -1 ? "hs-birdie" : d === 0 ? "hs-par" : d === 1 ? "hs-bogey" : "hs-double";
     return `<span class="hs-cell ${cls}">${strokes}</span>`;
@@ -524,12 +527,28 @@ function renderScorecard(holesJson) {
   const rows = holes.map(h => {
     const hs  = h.hole_score;
     const ht  = h.hole_tee;
-    const cls = scoreClass(hs.total_of_strokes, ht.par);
-    const vsP = hs.total_of_strokes - ht.par;
-    const vsPLabel = vsP === 0 ? "E" : (vsP > 0 ? `+${vsP}` : `${vsP}`);
     const girLabel = hs.green_in_regulation == null ? `<span class="fir-na">—</span>`
       : hs.green_in_regulation ? `<span class="gir-hit">✓</span>` : `<span class="gir-miss">✗</span>`;
     const dist = ht.distance ? Math.round(ht.distance) + "y" : "—";
+
+    if (hs.scratched) {
+      return `<tr class="sc-row-pickup">
+        <td>Hole ${h.sequence}</td>
+        <td>${ht.par}</td>
+        <td>${ht.stroke_index ?? "—"}</td>
+        <td>${dist}</td>
+        <td><span class="hs-cell hs-pickup" title="Picked up (${hs.total_of_strokes} strokes)">•</span></td>
+        <td>—</td>
+        <td>${hs.total_of_putts || "—"}</td>
+        <td>${girLabel}</td>
+        <td>${firCell(hs.fairway_hit, ht.par)}</td>
+        <td>${hs.total_of_penalties || 0}</td>
+      </tr>`;
+    }
+
+    const cls = scoreClass(hs.total_of_strokes, ht.par);
+    const vsP = hs.total_of_strokes - ht.par;
+    const vsPLabel = vsP === 0 ? "E" : (vsP > 0 ? `+${vsP}` : `${vsP}`);
 
     return `<tr>
       <td>Hole ${h.sequence}</td>
