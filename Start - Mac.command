@@ -18,7 +18,7 @@ if ! command -v python3 &>/dev/null; then
 fi
 
 # Check Python version is 3.10+
-PY_VER=$(python3 -c "import sys; print(sys.version_info.minor + sys.version_info.major * 10)")
+PY_VER=$(python3 -c "import sys; print(sys.version_info.major * 100 + sys.version_info.minor)")
 if [ "$PY_VER" -lt 310 ]; then
   echo ""
   echo "⛳  StrokeIndexr requires Python 3.10 or later."
