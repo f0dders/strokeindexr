@@ -753,15 +753,18 @@ async function showRoundDetail(id) {
     ${renderShotMapHTML(r.holes_json)}
 
     <div class="notes-section">
-      <h4>Round Notes</h4>
+      <div class="notes-header">
+        <h4>Round Notes</h4>
+        <span class="notes-status" id="notesStatus"></span>
+      </div>
       <textarea id="notesArea" placeholder="How did you feel? Any context that affected your game — fatigue, conditions, distractions...">${r.notes || ""}</textarea>
       <div class="notes-footer">
         <label class="toggle-label notes-ai-toggle">
           <input type="checkbox" id="chkNotesAiExclude" ${r.notes_ai_excluded ? "checked" : ""} />
-          Exclude notes from AI analysis
+          Exclude from AI analysis
         </label>
-        <p class="ratings-note">These notes may be used by the AI coach to contextualise your performance. No personal names or identifying details will be referenced. Uncheck to include.</p>
-        <button class="btn-secondary" id="btnSaveNotes" data-id="${r.id}">Save Notes</button>
+        <p class="ratings-note">Notes are used by the AI coach for context only — no personal names or identifying details will be referenced.</p>
+        <button class="btn-notes-save" id="btnSaveNotes" data-id="${r.id}">Save</button>
       </div>
     </div>
 
@@ -801,17 +804,35 @@ async function showRoundDetail(id) {
     });
   });
 
-  document.getElementById("btnSaveNotes").addEventListener("click", async () => {
-    const notes = document.getElementById("notesArea").value;
+  const notesArea  = document.getElementById("notesArea");
+  const notesStatus = document.getElementById("notesStatus");
+  const btnSaveNotes = document.getElementById("btnSaveNotes");
+
+  async function saveNotes() {
+    const notes = notesArea.value;
+    btnSaveNotes.textContent = "Saving…";
+    btnSaveNotes.disabled = true;
     await apiFetch(`/api/rounds/${r.id}/notes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes }),
     });
-    const btn = document.getElementById("btnSaveNotes");
-    btn.textContent = "Saved ✓";
-    setTimeout(() => btn.textContent = "Save Notes", 2000);
+    notesStatus.textContent = "Saved";
+    notesStatus.className = "notes-status notes-saved";
+    btnSaveNotes.textContent = "Save";
+    btnSaveNotes.disabled = false;
+    btnSaveNotes.classList.remove("notes-dirty");
+    setTimeout(() => { notesStatus.textContent = ""; notesStatus.className = "notes-status"; }, 2500);
+  }
+
+  notesArea.addEventListener("input", () => {
+    notesStatus.textContent = "Unsaved changes";
+    notesStatus.className = "notes-status notes-unsaved";
+    btnSaveNotes.classList.add("notes-dirty");
   });
+
+  notesArea.addEventListener("blur", saveNotes);
+  btnSaveNotes.addEventListener("click", saveNotes);
 
   document.getElementById("btnDeleteRound").addEventListener("click", async () => {
     if (!confirm("Delete this round? This cannot be undone.")) return;
