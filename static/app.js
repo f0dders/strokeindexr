@@ -388,6 +388,55 @@ function initShotMaps(holesJson) {
   });
 }
 
+// ── Compact mini scorecard (round history cards) ────────────────────────────
+function miniScorecardHTML(holesJson) {
+  if (!holesJson) return "";
+  let holes;
+  try { holes = typeof holesJson === "string" ? JSON.parse(holesJson) : holesJson; }
+  catch { return ""; }
+  if (!holes?.length) return "";
+
+  const isEighteen = holes.length > 9;
+  const front = isEighteen ? holes.slice(0, 9) : holes;
+  const back  = isEighteen ? holes.slice(9) : [];
+
+  function hsCls(s, p) {
+    if (s == null || p == null) return "hs-unknown";
+    const d = s - p;
+    if (d <= -2) return "hs-eagle";
+    if (d === -1) return "hs-birdie";
+    if (d === 0)  return "hs-par";
+    if (d === 1)  return "hs-bogey";
+    return "hs-double";
+  }
+
+  function cells(group, row) {
+    return group.map(h => {
+      const s = h.hole_score?.total_of_strokes, p = h.hole_tee?.par, n = h.sequence;
+      if (row === "hole")  return `<td class="msc-td msc-hole">${n}</td>`;
+      if (row === "par")   return `<td class="msc-td msc-par">${p ?? ""}</td>`;
+      return `<td class="msc-td"><span class="hs-cell ${hsCls(s, p)}">${s ?? "?"}</span></td>`;
+    }).join("");
+  }
+
+  function tot(group, field) {
+    return group.reduce((s, h) => s + ((field === "par" ? h.hole_tee?.par : h.hole_score?.total_of_strokes) ?? 0), 0);
+  }
+
+  const fPar = tot(front, "par"), fScore = tot(front, "score");
+  const bPar = isEighteen ? tot(back, "par") : 0;
+  const bScore = isEighteen ? tot(back, "score") : 0;
+
+  const subCls = "msc-td msc-sub";
+  const colSep = `<td class="msc-sep"></td>`;
+
+  const holeRow  = `<tr class="msc-tr-holes"><td class="msc-label">HOLE</td>${cells(front,"hole")}<td class="${subCls}">OUT</td>${isEighteen ? colSep + cells(back,"hole") + `<td class="${subCls}">IN</td><td class="${subCls} msc-tot">TOT</td>` : ""}</tr>`;
+  const parRow   = `<tr class="msc-tr-par"><td class="msc-label">PAR</td>${cells(front,"par")}<td class="${subCls}">${fPar}</td>${isEighteen ? colSep + cells(back,"par") + `<td class="${subCls}">${bPar}</td><td class="${subCls} msc-tot">${fPar+bPar}</td>` : ""}</tr>`;
+  const scoreRow = `<tr class="msc-tr-score"><td class="msc-label">SCORE</td>${cells(front,"score")}<td class="${subCls} msc-sub-score">${fScore}</td>${isEighteen ? colSep + cells(back,"score") + `<td class="${subCls} msc-sub-score">${bScore}</td><td class="${subCls} msc-tot msc-sub-score">${fScore+bScore}</td>` : ""}</tr>`;
+
+  return `<div class="msc-wrap"><table class="msc">${holeRow}${parRow}${scoreRow}</table></div>`;
+}
+
 // ── TV-style scorecard banner ───────────────────────────────────────────────
 function tvScorecardHTML(holesJson) {
   if (!holesJson) return "";
@@ -532,22 +581,24 @@ async function loadRounds() {
   }
   el.innerHTML = rounds.map(r => `
     <div class="round-row" data-id="${r.id}">
-      <div class="round-row-main">
-        <span class="round-date">${fmtDate(r.date)}</span>
-        <span class="round-course">${r.course || "Unknown Course"}</span>
-        <div class="round-meta">
-          <span class="round-holes">${r.holes || "?"} holes</span>
-          ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
-          ${r.handicap_excluded || (r.holes !== 9 && r.holes !== 18) ? `<span class="hcp-excluded-badge" title="${r.holes !== 9 && r.holes !== 18 ? `Non-standard (${r.holes}H)` : "Manually excluded"}">WHS excl.</span>` : ""}
-          ${r.putts_unreliable ? `<span class="putts-unreliable-badge" title="Hole19 did not record putt data for several holes">⚠ putts</span>` : ""}
+      <div class="round-row-header">
+        <div class="round-row-hdr-left">
+          <div class="round-course">${r.course || "Unknown Course"}</div>
+          <div class="round-row-meta">
+            <span class="round-date">${fmtDate(r.date)}</span>
+            <span class="round-holes">${r.holes || "?"}H</span>
+            ${r.tee_colour ? teeBadge(r.tee_colour) : ""}
+            ${r.handicap_excluded || (r.holes !== 9 && r.holes !== 18) ? `<span class="hcp-excluded-badge" title="${r.holes !== 9 && r.holes !== 18 ? `Non-standard (${r.holes}H)` : "Manually excluded"}">WHS excl.</span>` : ""}
+            ${r.putts_unreliable ? `<span class="putts-unreliable-badge" title="Hole19 did not record putt data for several holes">⚠ putts</span>` : ""}
+          </div>
         </div>
-        <div class="round-score-group">
+        <div class="round-row-hdr-right">
           <span class="round-score">${r.score ?? "—"}</span>
           ${scoreLabel(r.score_vs_par)}
         </div>
       </div>
-      <div class="round-row-foot">
-        ${holeStripHTML(r.holes_json)}
+      <div class="round-row-body">
+        ${miniScorecardHTML(r.holes_json)}
         <div class="round-row-chips">
           ${r.gir_hit_pct != null ? `<span class="crr-chip" title="GIR">⛳ ${r.gir_hit_pct}%</span>` : ""}
           ${r.fairway_hit_pct != null ? `<span class="crr-chip" title="FIR">🎯 ${r.fairway_hit_pct}%</span>` : ""}
