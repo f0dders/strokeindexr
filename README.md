@@ -42,16 +42,24 @@
 StrokeIndexr needs Python 3.10 or later. If you're not sure whether you have it, the start script will tell you.
 
 **Mac:**
-1. Go to [python.org/downloads](https://www.python.org/downloads/)
-2. Click **Download Python** and run the installer
-3. Follow the installer — no custom settings needed
+
+The easiest option is [Homebrew](https://brew.sh) — if you use it for other tools, this is one command:
+```bash
+brew install python
+```
+Otherwise, download the installer from [python.org/downloads](https://www.python.org/downloads/), run it, and follow the prompts — no custom settings needed.
 
 **Windows:**
-1. Go to [python.org/downloads](https://www.python.org/downloads/)
-2. Click **Download Python** and run the installer
-3. **Important:** tick **"Add Python to PATH"** on the first screen before clicking Install
+
+If you have [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) (built into Windows 10/11), open a terminal and run:
+```
+winget install Python.Python.3
+```
+Alternatively, download the installer from [python.org/downloads](https://www.python.org/downloads/) and run it. **Important:** tick **"Add Python to PATH"** on the first screen before clicking Install — without this the start script won't be able to find Python.
 
 **Linux:**
+
+Use your distro's package manager:
 ```bash
 # Ubuntu/Debian
 sudo apt install python3 python3-pip python3-venv
@@ -62,6 +70,7 @@ sudo dnf install python3
 # Arch
 sudo pacman -S python
 ```
+If you use [Homebrew on Linux](https://brew.sh), `brew install python` also works.
 
 ### 2. Download StrokeIndexr
 
