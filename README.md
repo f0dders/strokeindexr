@@ -8,6 +8,24 @@
   *A personal golf statistics tracker that runs entirely on your own computer.*
 </div>
 
+## Screenshots
+
+<!-- Screenshot tour — drop PNG files into docs/screenshots/ using the filenames below -->
+
+| Dashboard | Round history |
+|-----------|---------------|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Round history](docs/screenshots/round-history.png) |
+
+| Round detail | Scorecard |
+|--------------|-----------|
+| ![Round detail](docs/screenshots/round-detail.png) | ![Scorecard](docs/screenshots/scorecard.png) |
+
+| AI round debrief |
+|-----------------|
+| ![AI round debrief](docs/screenshots/ai-debrief.png) |
+
+---
+
 > **Disclaimer:** StrokeIndexr is an independent, unofficial project and is not affiliated with, endorsed by, or connected to Hole19 Golf or any other third party. When you import a round, the app fetches weather data from Open-Meteo's free public API using the course GPS coordinates — no account or API key is required, and no personal data is sent. All round data is imported by you from your own personal round history, and remains stored entirely on your own machine.
 
 ---
