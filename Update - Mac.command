@@ -7,7 +7,7 @@ if ! command -v git &>/dev/null; then
   echo "downloading the latest release from:"
   echo "https://github.com/f0dders/strokeindexr/releases/latest"
   echo ""
-  read -p "Press Enter to close..."
+  sleep 5
   exit 1
 fi
 
@@ -19,7 +19,7 @@ if [ ! -d ".git" ]; then
   echo ""
   echo "Your data folder (data/) will not be affected."
   echo ""
-  read -p "Press Enter to close..."
+  sleep 5
   exit 0
 fi
 
@@ -34,4 +34,4 @@ pip install -q -r requirements.txt
 echo ""
 echo "✓ Update complete. Restart the app to use the new version."
 echo ""
-read -p "Press Enter to close..."
+sleep 5

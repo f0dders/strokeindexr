@@ -13,7 +13,7 @@ if ! command -v python3 &>/dev/null; then
   echo "   2. Download and install the latest version for Mac"
   echo "   3. Double-click Start - Mac.command again"
   echo ""
-  read -p "Press Enter to close..."
+  sleep 5
   exit 1
 fi
 
@@ -24,7 +24,7 @@ if [ "$PY_VER" -lt 310 ]; then
   echo "⛳  StrokeIndexr requires Python 3.10 or later."
   echo "   You have $(python3 --version). Please update at https://www.python.org/downloads/"
   echo ""
-  read -p "Press Enter to close..."
+  sleep 5
   exit 1
 fi
 
