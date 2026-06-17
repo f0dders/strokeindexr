@@ -283,8 +283,8 @@ def scrape_round(url: str) -> dict:
         holes_json = json.loads(data.get("holes_json") or "[]")
         if holes_json:
             h1 = holes_json[0]
-            lat = h1.get("tee_latitude")
-            lon = h1.get("tee_longitude")
+            lat = h1.get("hole_score", {}).get("tee_latitude")
+            lon = h1.get("hole_score", {}).get("tee_longitude")
             tee_time = data.get("tee_time", "08:00")
             hour = int(tee_time.split(":")[0])
             if lat and lon and data.get("date"):

@@ -63,8 +63,8 @@ def _backfill_missing_fields():
             # Weather
             if not r.get("weather_temp_c") and holes:
                 h1 = holes[0]
-                lat = h1.get("tee_latitude")
-                lon = h1.get("tee_longitude")
+                lat = h1.get("hole_score", {}).get("tee_latitude")
+                lon = h1.get("hole_score", {}).get("tee_longitude")
                 date = r.get("date")
                 tee_time = updates.get("tee_time") or r.get("tee_time") or "08:00"
                 hour = int(tee_time.split(":")[0])

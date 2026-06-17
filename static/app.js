@@ -1,5 +1,20 @@
 /* StrokeIndexr frontend */
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function weatherIcon(condition) {
+  if (!condition) return "🌤";
+  const c = condition.toLowerCase();
+  if (c.includes("thunder")) return "⛈";
+  if (c.includes("snow"))    return "❄️";
+  if (c.includes("shower"))  return "🌦";
+  if (c.includes("rain"))    return "🌧";
+  if (c.includes("drizzle")) return "🌦";
+  if (c.includes("fog"))     return "🌫";
+  if (c.includes("cloudy"))  return "⛅";
+  if (c.includes("clear"))   return "☀️";
+  return "🌤";
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 let currentAnalysis = "performance";
 let charts = {};
@@ -623,6 +638,10 @@ async function loadRounds() {
           ${r.gir_hit_pct != null ? `<span class="crr-chip" title="GIR">⛳ ${r.gir_hit_pct}%</span>` : ""}
           ${r.fairway_hit_pct != null ? `<span class="crr-chip" title="FIR">🎯 ${r.fairway_hit_pct}%</span>` : ""}
           ${r.putts != null && !r.putts_unreliable ? `<span class="crr-chip" title="Putts">⛏ ${r.putts}</span>` : ""}
+          ${r.tee_time ? `<span class="crr-chip" title="Tee time">🕐 ${r.tee_time}</span>` : ""}
+          ${r.weather_temp_c != null ? `<span class="crr-chip" title="Temperature">🌡 ${r.weather_temp_c}°C</span>` : ""}
+          ${r.weather_wind_kph != null ? `<span class="crr-chip" title="Wind speed">💨 ${r.weather_wind_kph} km/h</span>` : ""}
+          ${r.weather_condition ? `<span class="crr-chip" title="Conditions">${weatherIcon(r.weather_condition)} ${r.weather_condition}</span>` : ""}
         </div>
       </div>
     </div>
@@ -719,6 +738,15 @@ async function showRoundDetail(id) {
         <div class="detail-stat"><span>Bogeys</span><span class="dval">${fmt(r.bogeys_pct, "%")}</span></div>
         <div class="detail-stat"><span>Doubles+</span><span class="dval">${fmt(r.doubles_plus_pct, "%")}</span></div>
       </div>
+      ${r.weather_condition || r.weather_temp_c != null ? `
+      <div class="detail-card">
+        <h4>Conditions</h4>
+        ${r.tee_time ? `<div class="detail-stat"><span>Tee Time</span><span class="dval">🕐 ${r.tee_time}</span></div>` : ""}
+        ${r.weather_condition ? `<div class="detail-stat"><span>Weather</span><span class="dval">${weatherIcon(r.weather_condition)} ${r.weather_condition}</span></div>` : ""}
+        ${r.weather_temp_c != null ? `<div class="detail-stat"><span>Temperature</span><span class="dval">🌡 ${r.weather_temp_c}°C</span></div>` : ""}
+        ${r.weather_wind_kph != null ? `<div class="detail-stat"><span>Wind Speed</span><span class="dval">💨 ${r.weather_wind_kph} km/h</span></div>` : ""}
+        ${r.weather_precip_mm != null ? `<div class="detail-stat"><span>Precipitation</span><span class="dval">🌧 ${r.weather_precip_mm} mm</span></div>` : ""}
+      </div>` : ""}
     </div>
 
     ${renderScorecard(r.holes_json)}
