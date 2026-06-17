@@ -55,6 +55,8 @@ If you have [winget](https://learn.microsoft.com/en-us/windows/package-manager/w
 ```
 winget install Python.Python.3.13
 ```
+This handles PATH automatically — no extra steps needed.
+
 Alternatively, download the installer from [python.org/downloads](https://www.python.org/downloads/) and run it. **Important:** tick **"Add Python to PATH"** on the first screen before clicking Install — without this the start script won't be able to find Python.
 
 **Linux:**
