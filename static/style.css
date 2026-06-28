@@ -1166,7 +1166,13 @@ h3 {
 }
 
 /* ── Global summary card footer ── */
-.gs-footer { margin-top: 10px; }
+.gs-footer { margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.gs-stale-badge {
+  font-size: 12px; font-weight: 500;
+  color: #92400e; background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 4px; padding: 2px 8px;
+}
 .gs-view-link {
   font-size: 13px;
   font-weight: 500;

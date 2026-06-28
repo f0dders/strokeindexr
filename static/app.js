@@ -100,10 +100,10 @@ async function loadDashboard() {
 
   renderStatCards(summary, whs);
   renderCharts(trends, whs, summary);
-  renderGlobalSummary(globalSummary.performance);
+  renderGlobalSummary(globalSummary.performance, globalSummary.latest_round_date);
 }
 
-function renderGlobalSummary(gs) {
+function renderGlobalSummary(gs, latestRoundDate) {
   const el = document.getElementById("globalSummary");
   if (!el) return;
 
@@ -116,10 +116,12 @@ function renderGlobalSummary(gs) {
     return;
   }
 
+  const isStale = latestRoundDate && gs.latest_round_date && latestRoundDate > gs.latest_round_date;
   el.innerHTML = `
     <div class="gs-snapshot">${gs.short_summary}</div>
     <div class="gs-footer">
-      <a class="gs-view-link" href="#" id="gsViewFull">View full analysis →</a>
+      ${isStale ? `<span class="gs-stale-badge">⚠ New round added — analysis may be out of date</span>` : ""}
+      <a class="gs-view-link" href="#" id="gsViewFull">${isStale ? "Regenerate →" : "View full analysis →"}</a>
     </div>
   `;
   document.getElementById("gsViewFull").addEventListener("click", e => {
