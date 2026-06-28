@@ -551,6 +551,29 @@ h3 {
 .import-status.error   { background: #fdecea; color: var(--red); display: block; }
 .import-status.loading { background: #e8f4fd; color: #1a6fa8; display: block; }
 
+.ai-progress { display: flex; flex-direction: column; gap: 8px; }
+.ai-progress-step {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; opacity: 0.4; transition: opacity 0.3s;
+}
+.ai-progress-step.done { opacity: 0.5; }
+.ai-progress-step.active { opacity: 1; font-weight: 600; }
+.ai-progress-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #1a6fa8; flex-shrink: 0;
+}
+.ai-progress-step.done .ai-progress-dot { background: var(--green); }
+.ai-progress-step.active .ai-progress-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.6; }
+}
+.ai-progress-timer {
+  font-size: 12px; color: #1a6fa8; opacity: 0.7; margin-top: 4px; padding-left: 20px;
+}
+
 /* ── Scorecard ── */
 .scorecard-section {
   background: var(--surface);

@@ -1106,34 +1106,62 @@ async function showRatingsStep(courseId, course, tee, holes, onDone) {
   document.getElementById("btnWizSkip").addEventListener("click", () => onDone());
 }
 
-async function runPostImportAi(roundId, statusPrefix) {
-  // Step: short summary
-  setImportStatus("loading", `${statusPrefix} Generating round summary…`);
-  const sr = await apiFetch(`/api/ai/round-short-summary/${roundId}`, { method: "POST" });
-  if (!sr.ok) {
-    const e = await sr.json().catch(() => ({}));
-    setImportStatus("error", `✗ AI summary failed: ${e.error || sr.statusText}`);
-    return;
-  }
+function showAiProgress(steps, activeIndex) {
+  const el = document.getElementById("importStatus");
+  el.className = "import-status loading";
+  el.innerHTML = `
+    <div class="ai-progress">
+      ${steps.map((s, i) => `
+        <div class="ai-progress-step ${i < activeIndex ? "done" : i === activeIndex ? "active" : ""}">
+          <span class="ai-progress-dot"></span>
+          <span>${s}</span>
+        </div>`).join("")}
+      <div class="ai-progress-timer" id="aiProgressTimer"></div>
+    </div>`;
+}
 
-  // Step: global summary — auto mode, only regenerates if new round added
-  setImportStatus("loading", `${statusPrefix} Updating overall analysis…`);
-  const gs = await apiFetch("/api/ai/global-summary").then(r => r.json()).catch(() => ({}));
-  const body = {
-    type:      "performance",
-    auto:      true,
-    from_date: gs.default_from,
-    to_date:   gs.default_to,
-  };
-  const gr = await apiFetch("/api/ai/global-summary", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
-  });
-  if (gr.ok && gr.headers.get("content-type")?.includes("text")) {
-    // Drain the stream so save_global_summary fires server-side
-    const reader = gr.body.getReader();
-    while (!(await reader.read()).done) {}
+async function runPostImportAi(roundId, statusPrefix) {
+  const steps = ["Importing round data", "Generating round summary", "Updating overall analysis"];
+  showAiProgress(steps, 1);
+
+  // Start elapsed timer
+  const start = Date.now();
+  const timerEl = () => document.getElementById("aiProgressTimer");
+  const timerInterval = setInterval(() => {
+    const s = Math.floor((Date.now() - start) / 1000);
+    const el = timerEl();
+    if (el) el.textContent = `${s}s elapsed…`;
+  }, 1000);
+
+  try {
+    // Step: short summary
+    const sr = await apiFetch(`/api/ai/round-short-summary/${roundId}`, { method: "POST" });
+    if (!sr.ok) {
+      const e = await sr.json().catch(() => ({}));
+      throw new Error(`AI summary failed: ${e.error || sr.statusText}`);
+    }
+
+    // Step: global summary — auto mode, only regenerates if new round added
+    showAiProgress(steps, 2);
+    const gs = await apiFetch("/api/ai/global-summary").then(r => r.json()).catch(() => ({}));
+    const body = {
+      type:      "performance",
+      auto:      true,
+      from_date: gs.default_from,
+      to_date:   gs.default_to,
+    };
+    const gr = await apiFetch("/api/ai/global-summary", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(body),
+    });
+    if (gr.ok && gr.headers.get("content-type")?.includes("text")) {
+      // Drain the stream so save_global_summary fires server-side
+      const reader = gr.body.getReader();
+      while (!(await reader.read()).done) {}
+    }
+  } finally {
+    clearInterval(timerInterval);
   }
 }
 
@@ -1163,14 +1191,13 @@ async function doUrlImport(url, overwrite = false) {
     showTeePrompt(data.id, course, data.course_id, holes, async (tee) => {
       if (useAi) {
         await runPostImportAi(data.id, prefix);
-        setImportStatus("success", `${prefix} Tees: ${tee}. AI analysis ready.`);
-      } else {
-        setImportStatus("success", `${prefix} Tees: ${tee}.`);
       }
+      document.getElementById("importUrl").value = "";
+      document.getElementById("importNotes").value = "";
+      document.getElementById("chkImportNotesExclude").checked = false;
+      setImportStatus("", "");
+      showRoundDetail(data.id);
     });
-    document.getElementById("importUrl").value = "";
-    document.getElementById("importNotes").value = "";
-    document.getElementById("chkImportNotesExclude").checked = false;
   } catch (e) {
     setImportStatus("error", `✗ ${e.message}`);
   } finally {
@@ -1210,14 +1237,13 @@ async function doEmailImport(text, overwrite = false) {
     showTeePrompt(data.id, course, data.course_id, holes, async (tee) => {
       if (useAi) {
         await runPostImportAi(data.id, prefix);
-        setImportStatus("success", `${prefix} Tees: ${tee}. AI analysis ready.`);
-      } else {
-        setImportStatus("success", `${prefix} Tees: ${tee}.`);
       }
+      document.getElementById("importEmailText").value = "";
+      document.getElementById("importNotesEmail").value = "";
+      document.getElementById("chkImportNotesExcludeEmail").checked = false;
+      setImportStatus("", "");
+      showRoundDetail(data.id);
     });
-    document.getElementById("importEmailText").value = "";
-    document.getElementById("importNotesEmail").value = "";
-    document.getElementById("chkImportNotesExcludeEmail").checked = false;
   } catch (e) {
     setImportStatus("error", `✗ ${e.message}`);
   } finally {
