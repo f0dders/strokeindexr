@@ -1140,13 +1140,15 @@ async function runPostImportAi(roundId, statusPrefix) {
 // ── Import from URL ───────────────────────────────────────────────────────────
 async function doUrlImport(url, overwrite = false) {
   const useAi = importAiEnabled();
+  const notes = document.getElementById("importNotes").value.trim();
+  const notesExcluded = document.getElementById("chkImportNotesExclude").checked;
   document.getElementById("btnImport").disabled = true;
   setImportStatus("loading", "Fetching round data from Hole19…");
   try {
     const r = await apiFetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, overwrite }),
+      body: JSON.stringify({ url, overwrite, notes, notes_ai_excluded: notesExcluded }),
     });
     const data = await r.json();
     if (r.status === 409 && data.duplicate) {
@@ -1167,6 +1169,8 @@ async function doUrlImport(url, overwrite = false) {
       }
     });
     document.getElementById("importUrl").value = "";
+    document.getElementById("importNotes").value = "";
+    document.getElementById("chkImportNotesExclude").checked = false;
   } catch (e) {
     setImportStatus("error", `✗ ${e.message}`);
   } finally {
@@ -1182,13 +1186,15 @@ document.getElementById("btnImport").addEventListener("click", () => {
 // ── Import from email ─────────────────────────────────────────────────────────
 async function doEmailImport(text, overwrite = false) {
   const useAi = importAiEnabled();
+  const notes = document.getElementById("importNotesEmail").value.trim();
+  const notesExcluded = document.getElementById("chkImportNotesExcludeEmail").checked;
   document.getElementById("btnImportEmail").disabled = true;
   setImportStatus("loading", "Extracting stats from email…");
   try {
     const r = await apiFetch("/api/import/email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, overwrite }),
+      body: JSON.stringify({ text, overwrite, notes, notes_ai_excluded: notesExcluded }),
     });
     const data = await r.json();
     if (r.status === 409 && data.duplicate) {
@@ -1210,6 +1216,8 @@ async function doEmailImport(text, overwrite = false) {
       }
     });
     document.getElementById("importEmailText").value = "";
+    document.getElementById("importNotesEmail").value = "";
+    document.getElementById("chkImportNotesExcludeEmail").checked = false;
   } catch (e) {
     setImportStatus("error", `✗ ${e.message}`);
   } finally {

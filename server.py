@@ -146,6 +146,8 @@ def api_import():
     body = request.json or {}
     url = body.get("url", "").strip()
     overwrite = body.get("overwrite", False)
+    notes = body.get("notes", "").strip()
+    notes_ai_excluded = body.get("notes_ai_excluded", None)
     if not url:
         return jsonify({"error": "No URL provided"}), 400
     if "hole19golf.com" not in url:
@@ -156,6 +158,9 @@ def api_import():
         cfg = load_config()
         if not overwrite:
             data["notes_ai_excluded"] = 0 if cfg.get("notes_ai_default", True) else 1
+        # Per-import override takes precedence over global default
+        if notes_ai_excluded is not None:
+            data["notes_ai_excluded"] = 1 if notes_ai_excluded else 0
         existing = find_duplicate(data)
         if existing and not overwrite:
             return jsonify({"duplicate": True, "existing": {
@@ -166,6 +171,8 @@ def api_import():
             rid = replace_round(existing["id"], data)
         else:
             rid = insert_round(data)
+        if notes:
+            update_notes(rid, notes)
         sync_courses()
         course = get_course_by_name(data.get("course", ""))
         return jsonify({"ok": True, "id": rid, "data": data, "course_id": course["id"] if course else None})
@@ -181,6 +188,8 @@ def api_import_email():
     body = request.json or {}
     text = body.get("text", "").strip()
     overwrite = body.get("overwrite", False)
+    notes = body.get("notes", "").strip()
+    notes_ai_excluded = body.get("notes_ai_excluded", None)
     if not text:
         return jsonify({"error": "No email text provided"}), 400
 
@@ -207,6 +216,11 @@ def api_import_email():
         return jsonify({"error": "Could not extract date or course from email"}), 422
 
     try:
+        cfg = load_config()
+        if not overwrite:
+            data["notes_ai_excluded"] = 0 if cfg.get("notes_ai_default", True) else 1
+        if notes_ai_excluded is not None:
+            data["notes_ai_excluded"] = 1 if notes_ai_excluded else 0
         existing = find_duplicate(data)
         if existing and not overwrite:
             return jsonify({"duplicate": True, "existing": {
@@ -217,6 +231,8 @@ def api_import_email():
             rid = replace_round(existing["id"], data)
         else:
             rid = insert_round(data)
+        if notes:
+            update_notes(rid, notes)
         sync_courses()
         course = get_course_by_name(data.get("course", ""))
         return jsonify({"ok": True, "id": rid, "data": data, "method": method, "course_id": course["id"] if course else None})

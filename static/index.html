@@ -99,6 +99,14 @@
           <input type="url" id="importUrl" placeholder="https://www.hole19golf.com/performance/rounds/XXXXXX" />
           <button class="btn-primary" id="btnImport">Import</button>
         </div>
+        <div class="import-notes-section">
+          <label class="import-notes-label" for="importNotes">Round notes <span class="import-notes-hint">(optional — add context before generating AI analysis)</span></label>
+          <textarea id="importNotes" class="import-notes-area" placeholder="How did you feel? Any context that affected your game — fatigue, conditions, distractions…"></textarea>
+          <label class="toggle-label import-notes-ai-toggle">
+            <input type="checkbox" id="chkImportNotesExclude" />
+            Exclude these notes from AI analysis
+          </label>
+        </div>
         <div class="import-ai-toggle">
           <label class="ai-toggle-label">
             <input type="checkbox" id="chkImportAi" />
@@ -113,6 +121,14 @@
         <textarea id="importEmailText" placeholder="Paste the full email text here…"></textarea>
         <div style="margin-top:10px">
           <button class="btn-primary" id="btnImportEmail">Extract &amp; Import</button>
+        </div>
+        <div class="import-notes-section">
+          <label class="import-notes-label" for="importNotesEmail">Round notes <span class="import-notes-hint">(optional — add context before generating AI analysis)</span></label>
+          <textarea id="importNotesEmail" class="import-notes-area" placeholder="How did you feel? Any context that affected your game — fatigue, conditions, distractions…"></textarea>
+          <label class="toggle-label import-notes-ai-toggle">
+            <input type="checkbox" id="chkImportNotesExcludeEmail" />
+            Exclude these notes from AI analysis
+          </label>
         </div>
         <div class="import-ai-toggle">
           <label class="ai-toggle-label">

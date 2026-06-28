@@ -1078,6 +1078,47 @@ h3 {
 }
 
 /* ── Import AI toggle ── */
+.import-notes-section {
+  margin-bottom: 16px;
+}
+.import-notes-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.import-notes-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+.import-notes-area {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+.import-notes-area:focus { outline: none; border-color: var(--green-light); }
+.import-notes-ai-toggle {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
 .import-ai-toggle {
   background: var(--surface);
   border: 1px solid var(--border);
