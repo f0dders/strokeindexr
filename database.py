@@ -450,6 +450,7 @@ def get_rounds(limit: int = 100, offset: int = 0) -> list[dict]:
                       handicap, tee_colour, handicap_excluded, ai_short_summary,
                       holes_json, gir_hit_pct, fairway_hit_pct, scoring_mode,
                       tee_time, weather_temp_c, weather_wind_kph, weather_precip_mm, weather_condition,
+                      notes, notes_ai_excluded,
                       {PUTTS_UNRELIABLE_EXPR} as putts_unreliable
                FROM rounds ORDER BY date DESC, imported_at DESC LIMIT ? OFFSET ?""",
             (limit, offset),
