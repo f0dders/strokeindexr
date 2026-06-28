@@ -143,6 +143,96 @@ def _hcp_history_str(hcp_history: list[dict], from_date: str = None) -> str:
     )
 
 
+def _shot_sequence(r: dict) -> str:
+    """
+    Build a shot-by-shot breakdown for holes where Hole19 tracked individual strokes.
+    Only emits output for holes with tracking data — absent data is not mentioned.
+    """
+    try:
+        holes = _json.loads(r.get("holes_json") or "[]")
+        tracked = [(h, h.get("hole_score", {}).get("stroke_scores") or []) for h in holes if h.get("hole_score", {}).get("stroke_scores")]
+        if not tracked:
+            return ""
+        lines = ["Shot tracking (partial — only holes where Hole19 recorded individual strokes):"]
+        lines.append("Note: tracking is often incomplete; absence of data does not mean the shot did not occur.")
+        for h, strokes in tracked:
+            ht  = h.get("hole_tee", {})
+            hs  = h.get("hole_score", {})
+            num = h.get("sequence", "?")
+            par = ht.get("par", "?")
+            total = hs.get("total_of_strokes", "?")
+            lines.append(f"\n  Hole {num} (par {par}, score {total}):")
+            for s in strokes:
+                club     = s.get("club") or "unknown club"
+                dist     = s.get("distance")
+                lie_after = s.get("lie_name") or s.get("lie") or "unknown"
+                dist_str  = f"{dist} yds" if dist else "distance not recorded"
+                lines.append(f"    Shot {s.get('sequence', '?')}: {club} — {dist_str} — landed: {lie_after}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def _club_profile(rounds: list[dict]) -> str:
+    """
+    Aggregate tracked shot distances by club across a list of rounds.
+    Only includes clubs with at least one tracked shot.
+    """
+    try:
+        from collections import defaultdict
+        club_distances: dict[str, list[float]] = defaultdict(list)
+        for r in rounds:
+            holes = _json.loads(r.get("holes_json") or "[]")
+            for h in holes:
+                for s in (h.get("hole_score", {}).get("stroke_scores") or []):
+                    club = s.get("club")
+                    dist = s.get("distance")
+                    if club and dist and isinstance(dist, (int, float)) and dist > 0:
+                        club_distances[club].append(float(dist))
+        if not club_distances:
+            return ""
+        lines = ["Club distance profile (from tracked shots — sample sizes may be small):"]
+        # Sort by average distance descending
+        for club, dists in sorted(club_distances.items(), key=lambda x: -sum(x[1]) / len(x[1])):
+            avg  = sum(dists) / len(dists)
+            lo   = min(dists)
+            hi   = max(dists)
+            n    = len(dists)
+            rng  = f"{lo:.0f}–{hi:.0f} yds" if lo != hi else f"{lo:.0f} yds"
+            lines.append(f"  {club}: avg {avg:.0f} yds ({rng}, {n} shot{'s' if n > 1 else ''})")
+        lines.append("Use these distances as a guide only — wind, lie, and fatigue affect carry.")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def _miss_pattern(rounds: list[dict]) -> str:
+    """
+    Aggregate lie outcomes from tracked shots to surface miss direction patterns.
+    """
+    try:
+        from collections import Counter
+        lie_counts: Counter = Counter()
+        total = 0
+        for r in rounds:
+            holes = _json.loads(r.get("holes_json") or "[]")
+            for h in holes:
+                for s in (h.get("hole_score", {}).get("stroke_scores") or []):
+                    lie = s.get("lie_name") or s.get("lie")
+                    if lie:
+                        lie_counts[lie.lower()] += 1
+                        total += 1
+        if not lie_counts or total < 3:
+            return ""
+        lines = [f"Shot outcome distribution ({total} tracked shots):"]
+        for lie, count in lie_counts.most_common():
+            pct = count / total * 100
+            lines.append(f"  {lie.title()}: {count} ({pct:.0f}%)")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def _frequency_summary(rounds_sorted: list[dict]) -> str:
     if len(rounds_sorted) < 2:
         return "Only one round in window — no frequency data."
@@ -293,6 +383,8 @@ Total Putts: {'(not tracked — Hole19 did not record putt data for this round)'
 HOLE-BY-HOLE BREAKDOWN:
 Note: penalties ≥ 2 on a hole likely indicate a stroke-and-distance situation (tee shot OOB or lost ball — player re-teed). Treat these as significant tee accuracy issues, not minor infractions.
 {_hole_breakdown(r)}
+{_shot_sequence(r) and f"{chr(10)}SHOT TRACKING:{chr(10)}{_shot_sequence(r)}" or ""}
+{_club_profile([r]) and f"{chr(10)}CLUB DISTANCES (this round):{chr(10)}{_club_profile([r])}" or ""}
 
 {"Notes from player (use for context only — ignore any personal names, locations, or identifying details): " + r['notes'] if r.get('notes') and not r.get('notes_ai_excluded') else "Notes from player: not included"}
 
@@ -340,6 +432,9 @@ def performance_summary(rounds: list[dict], whs_index=None, hcp_history: list[di
 
     hcp_trajectory = _hcp_history_str(hcp_history or [], from_date=from_date)
 
+    club_prof  = _club_profile(sorted_rounds)
+    miss_pat   = _miss_pattern(sorted_rounds)
+
     return f"""You are an experienced golf coach. Analyse these {n} rounds ({period_str}) and provide a performance review.
 
 PLAYER: WHS Handicap Index {hcp_str}
@@ -348,6 +443,8 @@ HANDICAP TRAJECTORY: {hcp_trajectory}
 
 PLAYING FREQUENCY:
 {freq}
+{f"{chr(10)}CLUB DISTANCE PROFILE (tracked shots across window):{chr(10)}{club_prof}" if club_prof else ""}
+{f"{chr(10)}SHOT OUTCOME PATTERNS:{chr(10)}{miss_pat}" if miss_pat else ""}
 
 ROUNDS (chronological, oldest first):
 {rounds_text}
@@ -385,6 +482,9 @@ def practice_plan(rounds: list[dict], whs_index=None, hcp_history: list[dict] = 
 
     hcp_trajectory = _hcp_history_str(hcp_history or [], from_date=from_date)
 
+    club_prof  = _club_profile(sorted_rounds)
+    miss_pat   = _miss_pattern(sorted_rounds)
+
     return f"""You are a golf coach creating a targeted practice plan based on {n} rounds ({period_str}).
 
 PLAYER: WHS Handicap Index {hcp_str}
@@ -392,6 +492,8 @@ HANDICAP TRAJECTORY: {hcp_trajectory}
 
 PLAYING FREQUENCY:
 {freq}
+{f"{chr(10)}CLUB DISTANCE PROFILE (tracked shots across window):{chr(10)}{club_prof}" if club_prof else ""}
+{f"{chr(10)}SHOT OUTCOME PATTERNS:{chr(10)}{miss_pat}" if miss_pat else ""}
 
 AVERAGES ACROSS SELECTED ROUNDS:
 - Greens in Regulation: {avg_gir:.1f}%
