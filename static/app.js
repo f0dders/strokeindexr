@@ -729,6 +729,7 @@ async function showRoundDetail(id) {
         <h4>Short Game</h4>
         <div class="detail-stat"><span>Up & Down</span><span class="dval">${fmt(r.up_and_down_pct, "%")}</span></div>
         <div class="detail-stat"><span>Scrambling</span><span class="dval">${fmt(r.scrambling_pct, "%")}</span></div>
+        ${(() => { const holes = JSON.parse(r.holes_json || "[]"); const total = holes.reduce((s, h) => s + (h?.hole_score?.total_of_sand_shots || 0), 0); return total > 0 ? `<div class="detail-stat"><span>Bunker Shots</span><span class="dval">${total}</span></div>` : ""; })()}
         <div class="detail-stat"><span>Sand Saves</span><span class="dval">${fmt(r.sand_saves_pct, "%")}</span></div>
         ${r.best_hole ? `<div class="detail-stat"><span>Best Hole</span><span class="dval">#${r.best_hole}</span></div>` : ""}
       </div>
