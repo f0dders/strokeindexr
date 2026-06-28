@@ -20,4 +20,4 @@ if __name__ == "__main__":
     threading.Thread(target=open_browser, daemon=True).start()
     threading.Thread(target=_fetch_latest_version, daemon=True).start()
     threading.Thread(target=_backfill_missing_fields, daemon=True).start()
-    serve(app, host="127.0.0.1", port=PORT)
+    serve(app, host="127.0.0.1", port=PORT, threads=8)
