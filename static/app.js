@@ -757,7 +757,7 @@ async function showRoundDetail(id) {
         <h4>Round Notes</h4>
         <span class="notes-status" id="notesStatus"></span>
       </div>
-      <textarea id="notesArea" placeholder="How did you feel? Any context that affected your game — fatigue, conditions, distractions...">${r.notes || ""}</textarea>
+      <textarea id="notesArea" placeholder="How did the round feel overall? Consider: driving accuracy, putting confidence, fatigue or energy levels, warm-up, mental focus, any equipment issues, or anything unusual about the conditions. The more context you give, the sharper the AI coaching.">${r.notes || ""}</textarea>
       <div class="notes-footer">
         <label class="toggle-label notes-ai-toggle">
           <input type="checkbox" id="chkNotesAiExclude" ${r.notes_ai_excluded ? "checked" : ""} />
