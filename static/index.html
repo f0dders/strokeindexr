@@ -8,7 +8,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=1.5.7" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -26,8 +26,13 @@
       <li><a href="#" data-view="import">Import Round</a></li>
       <li><a href="#" data-view="courses">Courses</a></li>
       <li><a href="#" data-view="ai">AI Analysis</a></li>
+      <li><a href="#" data-view="profile">My Profile</a></li>
     </ul>
     <div class="sidebar-footer">
+      <div class="sidebar-profile-chip" id="sidebarProfileChip">
+        <div class="sidebar-avatar" id="sidebarAvatar">?</div>
+        <span class="sidebar-profile-name" id="sidebarProfileName">My Profile</span>
+      </div>
       <button class="btn-settings" id="btnSettings">⚙ Settings</button>
       <div id="updateBanner" class="update-banner" style="display:none">
         <span class="update-banner-text">Update available</span>
@@ -174,6 +179,12 @@
       <div id="aiOutput" class="ai-output"></div>
     </section>
 
+    <!-- ── PROFILE ── -->
+    <section id="view-profile" class="view">
+      <h1>My Profile</h1>
+      <div id="profileContent"></div>
+    </section>
+
   </main>
 
   <!-- ── SETTINGS MODAL ── -->
@@ -234,6 +245,11 @@
           Include round notes in AI analysis by default
         </label>
         <p class="ratings-note">When enabled, notes you add to a round are sent to the AI coach as context. Personal names and identifying details are never referenced — only performance context (fatigue, conditions, etc.) is used. You can override this per round in the round detail view.</p>
+        <label class="toggle-label" style="margin-top:10px">
+          <input type="checkbox" id="settingsProfileAiInclude" />
+          Include player profile in AI analysis
+        </label>
+        <p class="ratings-note">When enabled, your age, golf background, self-assessed weaknesses, and physical notes are sent to the AI alongside your round data. You can also toggle this from the My Profile page.</p>
       </div>
 
       <div class="modal-actions">
@@ -243,6 +259,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=1.5.7"></script>
 </body>
 </html>

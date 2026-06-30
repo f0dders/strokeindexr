@@ -589,10 +589,30 @@ def load_config() -> dict:
         return {}
 
 
+_CONFIG_BACKUP_DIR = _APP_DIR / "config_backups"
+_CONFIG_BACKUP_KEEP = 20
+
+
 def save_config(config: dict):
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    if os.path.exists(CONFIG_PATH):
+        _backup_config()
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
+
+
+def _backup_config():
+    """Snapshot the current config before overwriting it, keeping the last N backups."""
+    import time
+    _CONFIG_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    dest = _CONFIG_BACKUP_DIR / f"config_{int(time.time() * 1000)}.json"
+    try:
+        shutil.copyfile(CONFIG_PATH, dest)
+    except Exception:
+        return
+    backups = sorted(_CONFIG_BACKUP_DIR.glob("config_*.json"))
+    for stale in backups[:-_CONFIG_BACKUP_KEEP]:
+        stale.unlink(missing_ok=True)
 
 
 def get_stats_summary() -> dict:

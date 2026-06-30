@@ -32,6 +32,7 @@ function showView(name) {
   if (name === "rounds") loadRounds();
   if (name === "courses") loadCourses();
   if (name === "ai") loadAiAnalysis();
+  if (name === "profile") loadProfile();
 }
 
 document.querySelectorAll(".nav-links a").forEach(a => {
@@ -1877,6 +1878,7 @@ document.getElementById("btnRunAi").addEventListener("click", async () => {
     type:      currentAnalysis,
     from_date: fromDate || undefined,
     to_date:   toDate   || undefined,
+    force:     true,
   };
 
   const resp = await apiFetch("/api/ai/global-summary", {
@@ -1889,7 +1891,6 @@ document.getElementById("btnRunAi").addEventListener("click", async () => {
     const data = await resp.json();
     if (data.skipped) {
       const reasons = {
-        window_unchanged: "Window and data unchanged — nothing to regenerate.",
         no_rounds_in_window: `No rounds between ${fmtDateShort(fromDate)} and ${fmtDateShort(toDate)}. Try widening the date range.`,
         no_new_rounds: "No new rounds since last generation.",
       };
@@ -2058,13 +2059,16 @@ document.getElementById("aiProvider").addEventListener("change", updateSettingsF
 
 document.getElementById("btnSettings").addEventListener("click", async () => {
   try {
-    const cfg = await apiFetch("/api/config").then(r => r.json());
+    const [cfg, profile] = await Promise.all([
+      apiFetch("/api/config").then(r => r.json()),
+      apiFetch("/api/profile").then(r => r.json()),
+    ]);
     document.getElementById("aiProvider").value = cfg.provider || "claude";
     document.getElementById("aiApiKey").value   = cfg.api_key  || "";
     document.getElementById("aiModel").value    = cfg.model    || "";
     document.getElementById("aiBaseUrl").value  = cfg.base_url || "";
-    // notes_ai_default: true = include (default), false = exclude
-    document.getElementById("notesAiDefault").checked = cfg.notes_ai_default !== false;
+    document.getElementById("notesAiDefault").checked        = cfg.notes_ai_default !== false;
+    document.getElementById("settingsProfileAiInclude").checked = profile.ai_include !== false;
   } catch (_) {}
   updateSettingsFields();
 
@@ -2129,6 +2133,19 @@ document.getElementById("btnSaveSettings").addEventListener("click", async () =>
         notes_ai_default: document.getElementById("notesAiDefault").checked,
       }),
     });
+
+    try {
+      const aiInclude = document.getElementById("settingsProfileAiInclude").checked;
+      const currentProfile = await apiFetch("/api/profile").then(r => r.json());
+      await apiFetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...currentProfile, ai_include: aiInclude }),
+      });
+    } catch (e) {
+      console.error("Failed to save profile AI toggle:", e);
+    }
+
     localStorage.setItem("hcpMode", document.getElementById("hcpMode").value);
     modal.classList.add("hidden");
     loadDashboard();
@@ -2140,8 +2157,284 @@ document.getElementById("btnSaveSettings").addEventListener("click", async () =>
   }
 });
 
+// ── Profile ───────────────────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function profileInitials(name) {
+  if (!name) return "?";
+  const letters = name.trim().replace(/[^A-Za-z\s]/g, "");
+  if (!letters.trim()) return "?";
+  const parts = letters.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function updateSidebarAvatar(profile) {
+  const avatarEl = document.getElementById("sidebarAvatar");
+  const nameEl   = document.getElementById("sidebarProfileName");
+  if (!avatarEl) return;
+  const name = profile?.name || "";
+  avatarEl.textContent = profileInitials(name);
+  if (nameEl) nameEl.textContent = name || "My Profile";
+}
+
+async function loadProfile() {
+  const [profile, clubDists, whs, summary] = await Promise.all([
+    apiFetch("/api/profile").then(r => r.json()),
+    apiFetch("/api/profile/club-distances").then(r => r.json()),
+    apiFetch("/api/whs").then(r => r.json()),
+    apiFetch("/api/stats/summary").then(r => r.json()),
+  ]);
+  renderProfile(profile, clubDists, whs, summary);
+  updateSidebarAvatar(profile);
+}
+
+function renderProfile(profile, clubDists, whs, summary) {
+  const p = profile || {};
+  const el = document.getElementById("profileContent");
+  if (!el) return;
+
+  const whsVal = whs?.current?.sufficient_data ? whs.current.index : null;
+  const rounds  = summary?.total_rounds ?? "—";
+  const avgVsPar = summary?.avg_score_vs_par != null
+    ? (summary.avg_score_vs_par >= 0 ? "+" : "") + parseFloat(summary.avg_score_vs_par).toFixed(1)
+    : "—";
+
+  const weaknessList = [
+    { key: "driving_accuracy",  label: "Driving accuracy" },
+    { key: "driving_distance",  label: "Driving distance" },
+    { key: "iron_play",         label: "Iron play" },
+    { key: "chipping",          label: "Chipping" },
+    { key: "bunker",            label: "Bunker play" },
+    { key: "putting",           label: "Putting" },
+    { key: "course_management", label: "Course management" },
+    { key: "mental_game",       label: "Mental game" },
+  ];
+  const currentWeaknesses = p.weaknesses || [];
+
+  const clubsHtml = clubDists.length
+    ? clubDists.map(c => `
+      <div class="profile-club-chip">
+        <div>
+          <div class="profile-club-name">${escapeHtml(c.club)}</div>
+          <div class="profile-club-shots">${c.shots} shot${c.shots !== 1 ? "s" : ""}</div>
+        </div>
+        <div class="profile-club-dist">${c.avg} yds</div>
+      </div>`).join("")
+    : `<p class="profile-clubs-empty">No tracked shots recorded yet. Enable shot tracking in Hole19 to populate this automatically.</p>`;
+
+  el.innerHTML = `
+    <div class="profile-header">
+      <div class="profile-avatar-wrap">
+        <div class="profile-avatar" id="profileAvatarBig">${escapeHtml(profileInitials(p.name))}</div>
+      </div>
+      <div class="profile-header-info">
+        <input class="profile-name-input" id="profileName" type="text" value="${escapeHtml(p.name || "")}" placeholder="Your name" maxlength="60" />
+        <div class="profile-header-stats">
+          <div class="profile-hstat">
+            <div class="profile-hstat-val">${whsVal != null ? whsVal : "—"}</div>
+            <div class="profile-hstat-lbl">WHS index</div>
+          </div>
+          <div class="profile-hstat">
+            <div class="profile-hstat-val">${rounds}</div>
+            <div class="profile-hstat-lbl">Rounds played</div>
+          </div>
+          <div class="profile-hstat">
+            <div class="profile-hstat-val">${avgVsPar}</div>
+            <div class="profile-hstat-lbl">Avg vs par</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-section">
+      <div class="profile-section-title">Background</div>
+      <div class="profile-card">
+        <div class="profile-field-grid">
+          <div class="profile-field">
+            <label>Age</label>
+            <input type="number" id="profileAge" value="${p.age || ""}" placeholder="e.g. 35" min="10" max="110">
+          </div>
+          <div class="profile-field">
+            <label>Dominant hand</label>
+            <select id="profileHand">
+              <option value="">Prefer not to say</option>
+              <option value="right" ${p.dominant_hand === "right" ? "selected" : ""}>Right-handed</option>
+              <option value="left"  ${p.dominant_hand === "left"  ? "selected" : ""}>Left-handed</option>
+            </select>
+          </div>
+          <div class="profile-field">
+            <label>Started playing (year)</label>
+            <input type="number" id="profileFirstYear" value="${p.first_played_year || ""}" placeholder="e.g. 2004" min="1900" max="2100">
+            <span class="profile-field-hint">Include even if you had a long break</span>
+          </div>
+          <div class="profile-field">
+            <label>Returned after break (year)</label>
+            <input type="number" id="profileSinceYear" value="${p.playing_since_year || ""}" placeholder="e.g. 2022" min="1900" max="2100">
+            <span class="profile-field-hint">Leave blank if there was no significant gap</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-section">
+      <div class="profile-section-title">Playing habits</div>
+      <div class="profile-card">
+        <div class="profile-field-grid">
+          <div class="profile-field">
+            <label>Typical practice frequency</label>
+            <select id="profileFreq">
+              <option value="" ${!p.practice_frequency ? "selected" : ""}>Not specified</option>
+              <option value="rarely"     ${p.practice_frequency === "rarely"     ? "selected" : ""}>Rarely (rounds only)</option>
+              <option value="occasional" ${p.practice_frequency === "occasional" ? "selected" : ""}>Occasionally (1–2× a month)</option>
+              <option value="weekly"     ${p.practice_frequency === "weekly"     ? "selected" : ""}>Weekly range sessions</option>
+              <option value="frequent"   ${p.practice_frequency === "frequent"   ? "selected" : ""}>Several times a week</option>
+            </select>
+          </div>
+          <div class="profile-field">
+            <label>Preferred format</label>
+            <select id="profileFormat">
+              <option value="" ${!p.preferred_format ? "selected" : ""}>Not specified</option>
+              <option value="Stableford"  ${p.preferred_format === "Stableford"  ? "selected" : ""}>Stableford</option>
+              <option value="Stroke play" ${p.preferred_format === "Stroke play" ? "selected" : ""}>Stroke play</option>
+              <option value="Match play"  ${p.preferred_format === "Match play"  ? "selected" : ""}>Match play</option>
+              <option value="Mixed"       ${p.preferred_format === "Mixed"       ? "selected" : ""}>Mixed</option>
+            </select>
+          </div>
+        </div>
+        <div class="profile-toggle-row" style="margin-top:12px">
+          <div>
+            <div class="profile-toggle-label-text">Currently taking lessons</div>
+            <div class="profile-toggle-label-sub">AI will avoid contradicting your coach's advice</div>
+          </div>
+          <label class="profile-toggle">
+            <input type="checkbox" id="profileLessons" ${p.has_lessons ? "checked" : ""}>
+            <span class="profile-toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-section">
+      <div class="profile-section-title">Self-assessment</div>
+      <div class="profile-card">
+        <div class="profile-field" style="margin-bottom:12px">
+          <label>Areas to work on</label>
+        </div>
+        <div class="profile-checklist">
+          ${weaknessList.map(w => `
+            <label class="profile-check-item">
+              <input type="checkbox" name="weakness" value="${w.key}" ${currentWeaknesses.includes(w.key) ? "checked" : ""}>
+              ${w.label}
+            </label>`).join("")}
+        </div>
+        <div class="profile-field">
+          <label>Additional notes</label>
+          <textarea id="profileWeaknessNotes" rows="2" placeholder="e.g. 'I tend to lose focus on the back 9' or 'strong short iron player'">${escapeHtml(p.weakness_notes || "")}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-section">
+      <div class="profile-section-title">Physical notes</div>
+      <div class="profile-card">
+        <div class="profile-field">
+          <label>Physical limitations or considerations</label>
+          <textarea id="profilePhysical" rows="2" placeholder="e.g. 'lower back stiffness limits full rotation' — helps the AI tailor swing and practice advice">${escapeHtml(p.physical_notes || "")}</textarea>
+          <span class="profile-field-hint">Optional. Kept private by default — only sent to AI if the toggle below is on.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-section">
+      <div class="profile-section-title">Club distances <span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);margin-left:6px">auto-calculated from tracked shots</span></div>
+      <div class="profile-card">
+        <div class="profile-clubs-grid">${clubsHtml}</div>
+        ${clubDists.length ? `<p class="profile-clubs-note">Based on shots tracked via Hole19. More rounds = more accurate averages.</p>` : ""}
+      </div>
+    </div>
+
+    <div class="profile-section">
+      <div class="profile-ai-card">
+        <div class="profile-toggle-row" style="padding:0">
+          <div>
+            <div class="profile-toggle-label-text">Include profile in AI analysis</div>
+            <div class="profile-toggle-label-sub">Age, background, weaknesses, and physical notes are sent alongside your round data</div>
+          </div>
+          <label class="profile-toggle">
+            <input type="checkbox" id="profileAiInclude" ${p.ai_include !== false ? "checked" : ""}>
+            <span class="profile-toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-actions">
+      <span class="profile-save-msg" id="profileSaveMsg">Changes saved</span>
+      <button class="btn-primary" id="btnSaveProfile">Save profile</button>
+    </div>
+  `;
+
+  document.getElementById("profileName").addEventListener("input", e => {
+    document.getElementById("profileAvatarBig").textContent = profileInitials(e.target.value);
+  });
+
+  document.getElementById("btnSaveProfile").addEventListener("click", saveProfile);
+}
+
+async function saveProfile() {
+  const btn = document.getElementById("btnSaveProfile");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  const weaknesses = [...document.querySelectorAll('input[name="weakness"]:checked')].map(el => el.value);
+
+  const profile = {
+    name:               document.getElementById("profileName").value.trim(),
+    age:                parseInt(document.getElementById("profileAge").value) || null,
+    dominant_hand:      document.getElementById("profileHand").value || null,
+    first_played_year:  parseInt(document.getElementById("profileFirstYear").value) || null,
+    playing_since_year: parseInt(document.getElementById("profileSinceYear").value) || null,
+    practice_frequency: document.getElementById("profileFreq").value || null,
+    preferred_format:   document.getElementById("profileFormat").value || null,
+    has_lessons:        document.getElementById("profileLessons").checked,
+    weaknesses,
+    weakness_notes:     document.getElementById("profileWeaknessNotes").value.trim(),
+    physical_notes:     document.getElementById("profilePhysical").value.trim(),
+    ai_include:         document.getElementById("profileAiInclude").checked,
+  };
+
+  try {
+    await apiFetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    });
+    updateSidebarAvatar(profile);
+    const msg = document.getElementById("profileSaveMsg");
+    if (msg) { msg.classList.add("visible"); setTimeout(() => msg.classList.remove("visible"), 2500); }
+  } catch (e) {
+    alert("Failed to save profile: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save profile";
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadDashboard();
+
+// Wire sidebar profile chip to profile view
+const sidebarChip = document.getElementById("sidebarProfileChip");
+if (sidebarChip) sidebarChip.addEventListener("click", () => showView("profile"));
+
+// Load avatar initials on startup without fetching all profile data
+apiFetch("/api/profile").then(r => r.json()).then(p => updateSidebarAvatar(p)).catch(() => {});
 
 // ── Version / update check ────────────────────────────────────────────────────
 (async () => {

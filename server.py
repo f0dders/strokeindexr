@@ -570,6 +570,80 @@ def api_save_config():
     return jsonify({"ok": True})
 
 
+# ── Profile API ───────────────────────────────────────────────────────────────
+
+@app.route("/api/profile", methods=["GET"])
+def api_get_profile():
+    cfg = load_config()
+    return jsonify(cfg.get("profile", {}))
+
+
+_PROFILE_TEXT_FIELDS = {"name": 60, "weakness_notes": 1000, "physical_notes": 1000}
+_PROFILE_INT_FIELDS = {"age": (10, 110), "first_played_year": (1900, 2100), "playing_since_year": (1900, 2100)}
+_PROFILE_ENUM_FIELDS = {
+    "dominant_hand": {"", "left", "right"},
+    "practice_frequency": {"", "rarely", "occasional", "weekly", "frequent"},
+    "preferred_format": {"", "Stableford", "Stroke play", "Match play", "Mixed"},
+}
+_PROFILE_WEAKNESS_KEYS = {
+    "driving_accuracy", "driving_distance", "iron_play", "chipping",
+    "bunker", "putting", "course_management", "mental_game",
+}
+
+
+def _clean_profile(incoming: dict) -> dict:
+    """Validate and coerce profile fields so malformed input can't crash prompt
+    generation or be rendered unescaped."""
+    if not isinstance(incoming, dict):
+        return {}
+    cleaned = {}
+
+    for field, max_len in _PROFILE_TEXT_FIELDS.items():
+        val = incoming.get(field)
+        if isinstance(val, str) and val.strip():
+            cleaned[field] = val.strip()[:max_len]
+
+    for field, (lo, hi) in _PROFILE_INT_FIELDS.items():
+        val = incoming.get(field)
+        try:
+            n = int(val)
+        except (TypeError, ValueError):
+            continue
+        if lo <= n <= hi:
+            cleaned[field] = n
+
+    for field, allowed in _PROFILE_ENUM_FIELDS.items():
+        val = incoming.get(field)
+        if val in allowed and val:
+            cleaned[field] = val
+
+    weaknesses = incoming.get("weaknesses")
+    if isinstance(weaknesses, list):
+        cleaned["weaknesses"] = [w for w in weaknesses if w in _PROFILE_WEAKNESS_KEYS]
+
+    if isinstance(incoming.get("has_lessons"), bool):
+        cleaned["has_lessons"] = incoming["has_lessons"]
+    if isinstance(incoming.get("ai_include"), bool):
+        cleaned["ai_include"] = incoming["ai_include"]
+
+    return cleaned
+
+
+@app.route("/api/profile", methods=["POST"])
+def api_save_profile():
+    cleaned = _clean_profile(request.json or {})
+    cfg = load_config()
+    cfg["profile"] = cleaned
+    save_config(cfg)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/profile/club-distances", methods=["GET"])
+def api_profile_club_distances():
+    rounds = get_rounds(limit=500)
+    return jsonify(prompts._club_profile_data(rounds))
+
+
 # ── AI API ────────────────────────────────────────────────────────────────────
 
 def _safe_stream(provider, prompt, on_complete=None):
@@ -624,7 +698,8 @@ def api_ai_round_debrief(round_id):
         provider = _build_provider()
         all_rounds = get_all_rounds_with_course_ratings()
         hcp_history = index_history(all_rounds)
-        prompt = prompts.round_debrief(r, hcp_history=hcp_history)
+        profile = load_config().get("profile", {})
+        prompt = prompts.round_debrief(r, hcp_history=hcp_history, profile=profile)
         return Response(
             _safe_stream(provider, prompt, on_complete=lambda text: save_debrief(round_id, text)),
             mimetype="text/plain",
@@ -640,7 +715,8 @@ def api_ai_round_short_summary(round_id):
         return jsonify({"error": "Round not found"}), 404
     try:
         provider = _build_provider()
-        prompt = prompts.round_short_summary(r)
+        profile = load_config().get("profile", {})
+        prompt = prompts.round_short_summary(r, profile=profile)
         text = "".join(provider.stream(prompt))
         if text.startswith("\n\n__AI_ERROR__"):
             return jsonify({"error": text}), 500
@@ -727,9 +803,11 @@ def api_gen_global_summary():
         whs_index = whs.get("index")
         hcp_history = index_history(all_rounds_whs)
 
+        profile = load_config().get("profile", {})
+
         short_text = "".join(provider.stream(
             prompts.global_short_summary(rounds, whs_index=whs_index,
-                                         from_date=from_date, to_date=to_date)
+                                         from_date=from_date, to_date=to_date, profile=profile)
         ))
 
         round_count = len(rounds)
@@ -738,7 +816,7 @@ def api_gen_global_summary():
         def generate():
             yield from _safe_stream(
                 provider,
-                prompt_fn(rounds, whs_index=whs_index, hcp_history=hcp_history, from_date=from_date, to_date=to_date),
+                prompt_fn(rounds, whs_index=whs_index, hcp_history=hcp_history, from_date=from_date, to_date=to_date, profile=profile),
                 on_complete=lambda full: save_global_summary(
                     summary_type, short_text, full,
                     round_count=round_count,
@@ -759,7 +837,8 @@ def api_ai_practice_plan():
         return jsonify({"error": "No rounds to analyse"}), 400
     try:
         provider = _build_provider()
-        prompt = prompts.practice_plan(rounds)
+        profile = load_config().get("profile", {})
+        prompt = prompts.practice_plan(rounds, profile=profile)
         return Response(_safe_stream(provider, prompt), mimetype="text/plain")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
