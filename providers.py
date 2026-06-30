@@ -67,7 +67,7 @@ class ClaudeProvider:
         client = anthropic.Anthropic(api_key=self.api_key)
         with client.messages.stream(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=8192,
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
             for text in stream.text_stream:

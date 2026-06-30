@@ -206,6 +206,94 @@ def _club_profile(rounds: list[dict]) -> str:
         return ""
 
 
+def _club_profile_data(rounds: list[dict]) -> list[dict]:
+    """Return club distance data as JSON-serialisable list for the profile page."""
+    try:
+        from collections import defaultdict
+        club_distances: dict[str, list[float]] = defaultdict(list)
+        for r in rounds:
+            holes = _json.loads(r.get("holes_json") or "[]")
+            for h in holes:
+                for s in (h.get("hole_score", {}).get("stroke_scores") or []):
+                    club = s.get("club")
+                    dist = s.get("distance")
+                    if club and dist and isinstance(dist, (int, float)) and dist > 0:
+                        club_distances[club].append(float(dist))
+        result = []
+        for club, dists in sorted(club_distances.items(), key=lambda x: -sum(x[1]) / len(x[1])):
+            avg = sum(dists) / len(dists)
+            result.append({
+                "club": club,
+                "avg": round(avg),
+                "min": round(min(dists)),
+                "max": round(max(dists)),
+                "shots": len(dists),
+            })
+        return result
+    except Exception:
+        return []
+
+
+def _profile_context(profile: dict) -> str:
+    """Format player profile for injection into AI prompts."""
+    p = profile or {}
+    if not p or not p.get("ai_include", True):
+        return ""
+    lines = []
+    if p.get("age"):
+        lines.append(f"Age: {p['age']}")
+    if p.get("dominant_hand"):
+        hand = "right-handed" if p["dominant_hand"] == "right" else "left-handed"
+        lines.append(f"Dominant hand: {hand}")
+    first = p.get("first_played_year")
+    since = p.get("playing_since_year")
+    try:
+        first_int = int(first) if first else None
+        since_int = int(since) if since else None
+    except (TypeError, ValueError):
+        first_int = since_int = None
+    if first_int and since_int and since_int > first_int + 2:
+        lines.append(f"Golf background: first played in {first}, took a significant break, returning player since {since}")
+    elif since:
+        lines.append(f"Golf background: playing since {since}")
+    elif first:
+        lines.append(f"Golf background: playing since {first}")
+    freq_map = {
+        "rarely":     "rarely (rounds only, no practice sessions)",
+        "occasional": "occasionally (1–2 practice sessions a month)",
+        "weekly":     "weekly range sessions",
+        "frequent":   "several times a week",
+    }
+    freq = p.get("practice_frequency")
+    if freq:
+        lines.append(f"Practice frequency: {freq_map.get(freq, freq)}")
+    if p.get("preferred_format"):
+        lines.append(f"Preferred format: {p['preferred_format']}")
+    if p.get("has_lessons"):
+        lines.append("Currently taking lessons — please avoid contradicting the coach's advice in recommendations")
+    weakness_labels = {
+        "driving_accuracy":  "driving accuracy",
+        "driving_distance":  "driving distance",
+        "iron_play":         "iron play",
+        "chipping":          "chipping",
+        "bunker":            "bunker play",
+        "putting":           "putting",
+        "course_management": "course management",
+        "mental_game":       "mental game",
+    }
+    weaknesses = p.get("weaknesses") or []
+    if weaknesses:
+        w_labels = [weakness_labels.get(w, w) for w in weaknesses]
+        lines.append(f"Self-assessed areas to work on: {', '.join(w_labels)}")
+    if p.get("weakness_notes"):
+        lines.append(f"Additional self-assessment notes: {p['weakness_notes']}")
+    if p.get("physical_notes"):
+        lines.append(f"Physical considerations: {p['physical_notes']}")
+    if not lines:
+        return ""
+    return "PLAYER PROFILE:\n" + "\n".join(f"- {l}" for l in lines)
+
+
 def _miss_pattern(rounds: list[dict]) -> str:
     """
     Aggregate lie outcomes from tracked shots to surface miss direction patterns.
@@ -307,10 +395,11 @@ Rules:
 - Return ONLY the JSON block, no other text"""
 
 
-def round_short_summary(round_data: dict) -> str:
+def round_short_summary(round_data: dict, profile: dict = None) -> str:
     r = round_data
+    profile_ctx = _profile_context(profile or {})
     return f"""You are a golf coach. Summarise this round in exactly 2-3 sentences. Be specific to the numbers. Mention the score, one standout positive, and one area to work on.
-
+{f"{chr(10)}{profile_ctx}{chr(10)}" if profile_ctx else ""}
 Round: {r.get('date')} | {r.get('course')} | {r.get('holes')} holes
 Score: {r.get('score')} ({'+' if (r.get('score_vs_par') or 0) >= 0 else ''}{r.get('score_vs_par')} vs par {r.get('par')})
 Putts: {'(unreliable)' if r.get('putts_unreliable') else r.get('putts')} | GIR: {r.get('gir_hit_pct')}% | FIR: {r.get('fairway_hit_pct')}%
@@ -319,7 +408,7 @@ Doubles+: {r.get('doubles_plus_pct')}% | Up & Down: {r.get('up_and_down_pct')}%
 Return only the 2-3 sentence summary. No headers, no bullet points."""
 
 
-def global_short_summary(rounds: list[dict], whs_index=None, from_date: str = None, to_date: str = None) -> str:
+def global_short_summary(rounds: list[dict], whs_index=None, from_date: str = None, to_date: str = None, profile: dict = None) -> str:
     n = len(rounds)
     avg_vs_par = sum(r.get("score_vs_par") or 0 for r in rounds) / n if n else 0
     avg_gir    = sum(r.get("gir_hit_pct")  or 0 for r in rounds) / n if n else 0
@@ -328,9 +417,10 @@ def global_short_summary(rounds: list[dict], whs_index=None, from_date: str = No
     hcp_str    = f"WHS {whs_index}" if whs_index is not None else "not yet calculated"
     period_str = f"{from_date} to {to_date}" if from_date and to_date else "all available rounds"
     freq       = _frequency_summary(sorted(rounds, key=lambda r: r.get("date") or ""))
+    profile_ctx = _profile_context(profile or {})
 
     return f"""You are a golf coach. Write a 2-3 sentence performance snapshot covering {n} rounds ({period_str}). Be direct and specific. Mention handicap, a key strength, and the single biggest area to improve.
-
+{f"{chr(10)}{profile_ctx}{chr(10)}" if profile_ctx else ""}
 Data: {n} rounds | WHS Handicap Index: {hcp_str}
 Avg: {avg_vs_par:+.1f} vs par | {avg_gir:.0f}% GIR | {avg_putts:.0f} putts/round
 Playing frequency: {freq}
@@ -338,13 +428,15 @@ Playing frequency: {freq}
 Return only the 2-3 sentence summary. No headers, no bullet points."""
 
 
-def round_debrief(round_data: dict, hcp_history: list[dict] = None) -> str:
+def round_debrief(round_data: dict, hcp_history: list[dict] = None, profile: dict = None) -> str:
     r = round_data
     scoring_note = "" if (r.get("scoring_mode") or "stroke_play") == "stroke_play" else \
         f"\n- Format: Stableford (gross score includes strokes taken on pickup holes)"
 
-    return f"""You are an experienced golf coach and performance analyst. Analyse this golf round and provide a concise, actionable debrief.
+    profile_ctx = _profile_context(profile or {})
 
+    return f"""You are an experienced golf coach and performance analyst. Analyse this golf round and provide a concise, actionable debrief.
+{f"{chr(10)}{profile_ctx}{chr(10)}" if profile_ctx else ""}
 ROUND DATA:
 - Date: {r.get('date', 'Unknown')}
 - Course: {r.get('course', 'Unknown')}
@@ -399,7 +491,7 @@ Keep it concise, honest, and actionable. Avoid generic advice — ground everyth
 IMPORTANT: Do not reproduce, quote, or reference any personal names or identifying information from the player notes. Use notes only for performance context (e.g. fatigue, physical state, external conditions)."""
 
 
-def performance_summary(rounds: list[dict], whs_index=None, hcp_history: list[dict] = None, from_date: str = None, to_date: str = None) -> str:
+def performance_summary(rounds: list[dict], whs_index=None, hcp_history: list[dict] = None, from_date: str = None, to_date: str = None, profile: dict = None) -> str:
     n = len(rounds)
     if n == 0:
         return "No rounds available to analyse."
@@ -434,9 +526,10 @@ def performance_summary(rounds: list[dict], whs_index=None, hcp_history: list[di
 
     club_prof  = _club_profile(sorted_rounds)
     miss_pat   = _miss_pattern(sorted_rounds)
+    profile_ctx = _profile_context(profile or {})
 
     return f"""You are an experienced golf coach. Analyse these {n} rounds ({period_str}) and provide a performance review.
-
+{f"{chr(10)}{profile_ctx}{chr(10)}" if profile_ctx else ""}
 PLAYER: WHS Handicap Index {hcp_str}
 HANDICAP TRAJECTORY: {hcp_trajectory}
 {f"LOCATION CONTEXT: {location}" if location else ""}
@@ -463,7 +556,7 @@ Please provide:
 Be direct and data-driven. Ground every point in the actual numbers — avoid generic advice."""
 
 
-def practice_plan(rounds: list[dict], whs_index=None, hcp_history: list[dict] = None, from_date: str = None, to_date: str = None) -> str:
+def practice_plan(rounds: list[dict], whs_index=None, hcp_history: list[dict] = None, from_date: str = None, to_date: str = None, profile: dict = None) -> str:
     n = len(rounds)
     if n == 0:
         return "No rounds available to analyse."
@@ -484,9 +577,10 @@ def practice_plan(rounds: list[dict], whs_index=None, hcp_history: list[dict] = 
 
     club_prof  = _club_profile(sorted_rounds)
     miss_pat   = _miss_pattern(sorted_rounds)
+    profile_ctx = _profile_context(profile or {})
 
     return f"""You are a golf coach creating a targeted practice plan based on {n} rounds ({period_str}).
-
+{f"{chr(10)}{profile_ctx}{chr(10)}" if profile_ctx else ""}
 PLAYER: WHS Handicap Index {hcp_str}
 HANDICAP TRAJECTORY: {hcp_trajectory}
 
